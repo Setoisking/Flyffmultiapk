@@ -4,8 +4,8 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -50,7 +51,6 @@ public class MainActivity extends Activity {
     private FrameLayout overlayLayer;
     private final List<WebView> activeWebViews = new ArrayList<>();
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
-    private SharedPreferences prefs;
 
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
@@ -76,7 +76,6 @@ public class MainActivity extends Activity {
         setContentView(R.layout.main);
         hideSystemUI();
 
-        prefs = getSharedPreferences("NeuzOS_Config", MODE_PRIVATE);
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
 
@@ -106,6 +105,30 @@ public class MainActivity extends Activity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             hideSystemUI();
+        }
+    }
+
+    // ==========================================
+    // FOLDABLE ANPASSUNG (AUF- & ZUKLAPPEN)
+    // ==========================================
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        hideSystemUI();
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int screenW = dm.widthPixels;
+        int screenH = dm.heightPixels;
+
+        for (FrameLayout container : overlayContainers) {
+            if (container != null) {
+                if (container.getX() + container.getWidth() > screenW) {
+                    container.setX(Math.max(0, screenW - container.getWidth() - 20));
+                }
+                if (container.getY() + container.getHeight() > screenH) {
+                    container.setY(Math.max(0, screenH - container.getHeight() - 20));
+                }
+            }
         }
     }
 
@@ -264,7 +287,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // MULTI-SESSION OVERLAYS & SESSION SEPARATION
+    // MULTI-SESSION OVERLAYS & VIEW SWAP
     // ==========================================
     private void promptSessionCount() {
         final String[] options = {
@@ -371,7 +394,6 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
-                    // Klick (unter 250ms): Minimieren / Wiederherstellen mit FPS-Limiter
                     if (duration < 250) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
@@ -386,7 +408,7 @@ public class MainActivity extends Activity {
                             p.height = (int) (36 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
-                            setClientLowSpecMode(webView, true); // FPS auf 10 drosseln
+                            setClientLowSpecMode(webView, true);
                         } else {
                             View clientView = container.getChildAt(0);
                             if (clientView != null) clientView.setVisibility(View.VISIBLE);
@@ -398,12 +420,11 @@ public class MainActivity extends Activity {
                             p.height = savedHeight[0];
                             container.setLayoutParams(p);
                             isMinimized[0] = false;
-                            setClientLowSpecMode(webView, false); // FPS wieder normalisieren
+                            setClientLowSpecMode(webView, false);
                         }
                         return true;
                     }
 
-                    // Langer Druck (ab 600ms): Echter View-Tausch ohne Neuladen
                     if (duration >= 600) {
                         swapViewsWithoutReload(overlayIndex);
                         return true;
@@ -417,7 +438,6 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // Diagonales Resizen
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
@@ -485,14 +505,13 @@ public class MainActivity extends Activity {
         }
     }
 
-    // NeuzOS Low-Spec FPS Limiter
     private void setClientLowSpecMode(WebView wv, boolean enableLowSpec) {
         if (wv == null) return;
         if (enableLowSpec) {
             String js = "(function() {" +
                     "  window.__origRAF = window.__origRAF || window.requestAnimationFrame;" +
                     "  window.requestAnimationFrame = function(cb) {" +
-                    "    return setTimeout(function() { cb(performance.now()); }, 100);" + // drosselt auf ~10 FPS
+                    "    return setTimeout(function() { cb(performance.now()); }, 100);" +
                     "  };" +
                     "})();";
             wv.evaluateJavascript(js, null);
@@ -527,7 +546,6 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
 
-        // Multi-Profile Isolation: Eigener AppCache & WebDB-Pfad pro Client
         File profileDir = new File(getFilesDir(), "client_profile_" + clientSessionId);
         if (!profileDir.exists()) profileDir.mkdirs();
         s.setDatabasePath(profileDir.getPath());
