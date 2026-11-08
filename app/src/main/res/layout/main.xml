@@ -5,11 +5,27 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
+    <!-- Haupt-Client (Vollbild) -->
     <WebView
         android:id="@+id/webView1"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
+    <!-- F-Tool Button für Hauptaccount (oben links) -->
+    <Button
+        android:id="@+id/btnFtoolMain"
+        android:layout_width="wrap_content"
+        android:layout_height="36dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="10dp"
+        android:background="#88000000"
+        android:paddingLeft="10dp"
+        android:paddingRight="10dp"
+        android:text="FTool 1: OFF"
+        android:textColor="#FFFFFF"
+        android:textSize="12sp" />
+
+    <!-- Overlay-Container (Zweit-Account) -->
     <FrameLayout
         android:id="@+id/overlayContainer"
         android:layout_width="320dp"
@@ -23,13 +39,32 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
-        <Button
-            android:id="@+id/btnToggleSize"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+        <!-- Bedienleiste für Zweit-Account -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
             android:layout_gravity="top|end"
-            android:text="—"
-            android:textColor="#FFFFFF"
-            android:background="#88000000" />
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/btnFtoolOverlay"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:background="#88000000"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp"
+                android:text="FT 2: OFF"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp" />
+
+            <Button
+                android:id="@+id/btnToggleSize"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="#AA000000"
+                android:text="—"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+        </LinearLayout>
     </FrameLayout>
 </FrameLayout>
