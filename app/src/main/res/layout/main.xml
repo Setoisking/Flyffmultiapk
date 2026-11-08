@@ -11,20 +11,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- F-Tool Button für Hauptaccount (oben links) -->
-    <Button
-        android:id="@+id/btnFtool1"
-        android:layout_width="wrap_content"
-        android:layout_height="36dp"
-        android:layout_gravity="top|start"
-        android:layout_margin="10dp"
-        android:background="#88000000"
-        android:paddingLeft="10dp"
-        android:paddingRight="10dp"
-        android:text="FT 1: OFF"
-        android:textColor="#FFFFFF"
-        android:textSize="12sp" />
-
     <!-- Overlay-Container: Client 2 -->
     <LinearLayout
         android:id="@+id/overlayContainer2"
@@ -51,31 +37,19 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:text="::: C2 (RM)"
+                android:text="::: C2 (Drag)"
                 android:textColor="#AAAAAA"
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnFtool2"
-                android:layout_width="wrap_content"
-                android:layout_height="28dp"
-                android:background="#555566"
-                android:paddingLeft="6dp"
-                android:paddingRight="6dp"
-                android:text="FT 2: OFF"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp" />
-
-            <Button
                 android:id="@+id/btnToggle2"
-                android:layout_width="32dp"
+                android:layout_width="36dp"
                 android:layout_height="28dp"
-                android:layout_marginStart="4dp"
                 android:background="#555566"
                 android:text="—"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </LinearLayout>
 
         <WebView
@@ -111,31 +85,19 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:text="::: C3"
+                android:text="::: C3 (Drag)"
                 android:textColor="#AAAAAA"
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnFtool3"
-                android:layout_width="wrap_content"
-                android:layout_height="28dp"
-                android:background="#4A5B73"
-                android:paddingLeft="6dp"
-                android:paddingRight="6dp"
-                android:text="FT 3: OFF"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp" />
-
-            <Button
                 android:id="@+id/btnToggle3"
-                android:layout_width="32dp"
+                android:layout_width="36dp"
                 android:layout_height="28dp"
-                android:layout_marginStart="4dp"
                 android:background="#4A5B73"
                 android:text="—"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </LinearLayout>
 
         <WebView
@@ -171,31 +133,19 @@
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:text="::: C4"
+                android:text="::: C4 (Drag)"
                 android:textColor="#AAAAAA"
                 android:textSize="11sp"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnFtool4"
-                android:layout_width="wrap_content"
-                android:layout_height="28dp"
-                android:background="#6E4D74"
-                android:paddingLeft="6dp"
-                android:paddingRight="6dp"
-                android:text="FT 4: OFF"
-                android:textColor="#FFFFFF"
-                android:textSize="10sp" />
-
-            <Button
                 android:id="@+id/btnToggle4"
-                android:layout_width="32dp"
+                android:layout_width="36dp"
                 android:layout_height="28dp"
-                android:layout_marginStart="4dp"
                 android:background="#6E4D74"
                 android:text="—"
                 android:textColor="#FFFFFF"
-                android:textSize="12sp" />
+                android:textSize="14sp" />
         </LinearLayout>
 
         <WebView
