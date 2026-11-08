@@ -3,15 +3,16 @@ package com.flyff.multiclient;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.os.Build;
 import android.os.Bundle;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
@@ -19,9 +20,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -34,27 +33,31 @@ public class MainActivity extends Activity {
     private FrameLayout overlayLayer;
     private final List<WebView> activeWebViews = new ArrayList<>();
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
-    private SharedPreferences prefs;
 
     private int activeSwapIndex = -1;
 
     private final int[] CLIENT_COLORS = {
-            Color.parseColor("#00E676"),
-            Color.parseColor("#00E5FF"),
-            Color.parseColor("#FF007F"),
-            Color.parseColor("#FFD600"),
-            Color.parseColor("#7C4DFF"),
-            Color.parseColor("#FF6D00"),
-            Color.parseColor("#1DE9B6")
+            Color.parseColor("#00E676"), // C2: Grün
+            Color.parseColor("#00E5FF"), // C3: Cyan
+            Color.parseColor("#FF007F"), // C4: Pink
+            Color.parseColor("#FFD600"), // C5: Gelb
+            Color.parseColor("#7C4DFF"), // C6: Lila
+            Color.parseColor("#FF6D00"), // C7: Orange
+            Color.parseColor("#1DE9B6")  // C8: Türkis
     };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        setContentView(R.layout.main);
 
-        prefs = getSharedPreferences("NeuzOS_Config", MODE_PRIVATE);
+        // Header und TitleBar komplett abschalten
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        setContentView(R.layout.main);
+        hideSystemUI();
+
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
 
@@ -71,18 +74,39 @@ public class MainActivity extends Activity {
         promptSessionCount();
     }
 
+    private void hideSystemUI() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+            getWindow().getDecorView().setSystemUiVisibility(
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN
+                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            );
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            hideSystemUI();
+        }
+    }
+
     private void addGridPresetButton() {
         float density = getResources().getDisplayMetrics().density;
         Button gridBtn = new Button(this);
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams((int) (70 * density), (int) (32 * density));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams((int) (64 * density), (int) (28 * density));
         params.gravity = Gravity.TOP | Gravity.START;
-        params.leftMargin = (int) (10 * density);
-        params.topMargin = (int) (10 * density);
+        params.leftMargin = (int) (8 * density);
+        params.topMargin = (int) (8 * density);
         gridBtn.setLayoutParams(params);
         gridBtn.setText("⊞ Grid");
         gridBtn.setTextColor(Color.WHITE);
-        gridBtn.setTextSize(11);
-        gridBtn.setBackgroundColor(Color.parseColor("#88111115"));
+        gridBtn.setTextSize(10);
+        gridBtn.setBackgroundColor(Color.parseColor("#66000000"));
         gridBtn.setOnClickListener(v -> applyGridLayout());
         rootContainer.addView(gridBtn);
     }
@@ -94,7 +118,7 @@ public class MainActivity extends Activity {
         };
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
-        builder.setTitle("NeuzOS Multi-Client: Sessions wählen")
+        builder.setTitle("Sessions wählen")
                 .setCancelable(false)
                 .setItems(options, (dialog, which) -> {
                     int totalSessions = which + 1;
@@ -111,93 +135,54 @@ public class MainActivity extends Activity {
         float density = getResources().getDisplayMetrics().density;
         final int overlayIndex = index;
 
+        // Haupt-Container
         FrameLayout container = new FrameLayout(this);
-        int defaultWidth = (int) (260 * density);
-        int defaultHeight = (int) (180 * density);
+        int defaultWidth = (int) (250 * density);
+        int defaultHeight = (int) (160 * density);
 
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(defaultWidth, defaultHeight);
-        containerParams.leftMargin = (int) (15 * density + (index * 20 * density));
-        containerParams.topMargin = (int) (50 * density + (index * 20 * density));
+        containerParams.leftMargin = (int) (10 * density + (index * 20 * density));
+        containerParams.topMargin = (int) (40 * density + (index * 20 * density));
         container.setLayoutParams(containerParams);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#1A1A1E"));
-        bg.setCornerRadius(8 * density);
+        bg.setColor(Color.parseColor("#151518"));
+        bg.setCornerRadius(6 * density);
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        LinearLayout contentLayout = new LinearLayout(this);
-        contentLayout.setOrientation(LinearLayout.VERTICAL);
-        contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        LinearLayout titleBar = new LinearLayout(this);
-        titleBar.setLayoutParams(new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, (int) (32 * density)));
-        titleBar.setOrientation(LinearLayout.HORIZONTAL);
-        titleBar.setGravity(Gravity.CENTER_VERTICAL);
-        titleBar.setBackgroundColor(Color.parseColor("#282830"));
-        titleBar.setPadding((int) (6 * density), 0, (int) (4 * density), 0);
-
-        TextView badge = new TextView(this);
-        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (22 * density), (int) (22 * density));
-        badgeParams.setMarginEnd((int) (4 * density));
-        badge.setLayoutParams(badgeParams);
-        badge.setText("C" + clientNumber);
-        badge.setTextColor(Color.WHITE);
-        badge.setTextSize(10);
-        badge.setGravity(Gravity.CENTER);
-        GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setShape(GradientDrawable.OVAL);
-        badgeBg.setColor(accentColor);
-        badge.setBackground(badgeBg);
-
-        TextView dragArea = new TextView(this);
-        LinearLayout.LayoutParams dragParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
-        dragArea.setLayoutParams(dragParams);
-        dragArea.setGravity(Gravity.CENTER_VERTICAL);
-        dragArea.setText("S" + clientNumber);
-        dragArea.setTextColor(Color.parseColor("#CCCCCC"));
-        dragArea.setTextSize(11);
-
-        Button btnLogin = createBarButton("🔑", (int) (24 * density), density);
-        btnLogin.setOnClickListener(v -> handleQuickLogin(clientNumber, overlayIndex + 1));
-
-        final boolean[] isMuted = {true};
-        Button btnMute = createBarButton("🔇", (int) (24 * density), density);
-        btnMute.setOnClickListener(v -> {
-            isMuted[0] = !isMuted[0];
-            setClientAudioMuted(activeWebViews.get(overlayIndex + 1), isMuted[0]);
-            btnMute.setText(isMuted[0] ? "🔇" : "🔊");
-        });
-
-        Button btnSwap = createBarButton("⇄", (int) (24 * density), density);
-        btnSwap.setOnClickListener(v -> toggleSwapClient(overlayIndex));
-
-        Button minBtn = createBarButton("—", (int) (24 * density), density);
-
-        titleBar.addView(badge);
-        titleBar.addView(dragArea);
-        titleBar.addView(btnLogin);
-        titleBar.addView(btnMute);
-        titleBar.addView(btnSwap);
-        titleBar.addView(minBtn);
-
+        // WebView füllt das komplette Overlay aus (kein Header)
         WebView webView = new WebView(this);
-        LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
+        FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         webView.setLayoutParams(webParams);
         configureWebView(webView);
         webView.loadUrl("https://universe.flyff.com/play");
         setClientAudioMuted(webView, true);
         activeWebViews.add(webView);
+        container.addView(webView);
 
-        contentLayout.addView(titleBar);
-        contentLayout.addView(webView);
-        container.addView(contentLayout);
+        // Rundes Badge oben links (dient als Drag-Handle, Klick = Minimieren, Langklick = Swap)
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setShape(GradientDrawable.OVAL);
+        badgeBg.setColor(accentColor);
 
+        TextView floatingBadge = new TextView(this);
+        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams((int) (32 * density), (int) (32 * density));
+        badgeParams.gravity = Gravity.TOP | Gravity.START;
+        badgeParams.leftMargin = (int) (4 * density);
+        badgeParams.topMargin = (int) (4 * density);
+        floatingBadge.setLayoutParams(badgeParams);
+        floatingBadge.setText("C" + clientNumber);
+        floatingBadge.setTextColor(Color.WHITE);
+        floatingBadge.setTextSize(10);
+        floatingBadge.setGravity(Gravity.CENTER);
+        floatingBadge.setBackground(badgeBg);
+        container.addView(floatingBadge);
+
+        // Resize-Handle unten rechts
         TextView resizeHandle = new TextView(this);
-        FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (28 * density), (int) (28 * density));
+        FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
         resizeHandle.setLayoutParams(resizeParams);
         resizeHandle.setText("⇲");
@@ -206,47 +191,88 @@ public class MainActivity extends Activity {
         resizeHandle.setGravity(Gravity.CENTER);
         container.addView(resizeHandle);
 
-        Button miniBubble = new Button(this);
-        FrameLayout.LayoutParams bubbleParams = new FrameLayout.LayoutParams((int) (38 * density), (int) (38 * density));
-        miniBubble.setLayoutParams(bubbleParams);
-        miniBubble.setText("C" + clientNumber);
-        miniBubble.setTextColor(Color.WHITE);
-        miniBubble.setTextSize(11);
-        miniBubble.setBackground(badgeBg);
-        miniBubble.setVisibility(View.GONE);
-        container.addView(miniBubble);
-
         overlayLayer.addView(container);
         overlayContainers.add(container);
 
+        // Drag & Drop über das runde Badge
         final float[] dX = {0};
         final float[] dY = {0};
-        View.OnTouchListener dragListener = (v, event) -> {
+        final long[] downTime = {0};
+
+        final int[] savedWidth = {defaultWidth};
+        final int[] savedHeight = {defaultHeight};
+        final boolean[] isMinimized = {false};
+
+        floatingBadge.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dX[0] = container.getX() - event.getRawX();
                     dY[0] = container.getY() - event.getRawY();
+                    downTime[0] = System.currentTimeMillis();
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     return true;
+
                 case MotionEvent.ACTION_MOVE:
                     container.setX(event.getRawX() + dX[0]);
                     container.setY(event.getRawY() + dY[0]);
                     return true;
+
                 case MotionEvent.ACTION_UP:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    long duration = System.currentTimeMillis() - downTime[0];
+
+                    // Klick (unter 250ms): Minimieren / Wiederherstellen
+                    if (duration < 250) {
+                        if (!isMinimized[0]) {
+                            // Minimieren auf runden Kreis
+                            savedWidth[0] = container.getWidth();
+                            savedHeight[0] = container.getHeight();
+                            webView.setVisibility(View.GONE);
+                            resizeHandle.setVisibility(View.GONE);
+                            container.setBackground(null);
+
+                            ViewGroup.LayoutParams p = container.getLayoutParams();
+                            p.width = (int) (36 * density);
+                            p.height = (int) (36 * density);
+                            container.setLayoutParams(p);
+                            isMinimized[0] = true;
+                            setClientLowSpecMode(webView, true);
+                        } else {
+                            // Wiederherstellen
+                            webView.setVisibility(View.VISIBLE);
+                            resizeHandle.setVisibility(View.VISIBLE);
+                            container.setBackground(bg);
+
+                            ViewGroup.LayoutParams p = container.getLayoutParams();
+                            p.width = savedWidth[0];
+                            p.height = savedHeight[0];
+                            container.setLayoutParams(p);
+                            isMinimized[0] = false;
+                            setClientLowSpecMode(webView, false);
+                        }
+                        return true;
+                    }
+
+                    // Langer Druck (über 700ms): Quick-Swap mit Vollbild-Main
+                    if (duration >= 700) {
+                        toggleSwapClient(overlayIndex);
+                        return true;
+                    }
+                    return true;
+
                 case MotionEvent.ACTION_CANCEL:
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     return true;
-                default:
-                    return false;
             }
-        };
-        titleBar.setOnTouchListener(dragListener);
-        dragArea.setOnTouchListener(dragListener);
+            return false;
+        });
 
+        // Resize-Logik
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
         final int[] startH = {0};
+
         resizeHandle.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -256,90 +282,26 @@ public class MainActivity extends Activity {
                     startH[0] = container.getHeight();
                     v.getParent().requestDisallowInterceptTouchEvent(true);
                     return true;
+
                 case MotionEvent.ACTION_MOVE:
                     float deltaX = event.getRawX() - startX[0];
                     float deltaY = event.getRawY() - startY[0];
-                    int newW = (int) Math.max(160 * density, startW[0] + deltaX);
-                    int newH = (int) Math.max(120 * density, startH[0] + deltaY);
+                    int newW = (int) Math.max(120 * density, startW[0] + deltaX);
+                    int newH = (int) Math.max(90 * density, startH[0] + deltaY);
+
                     ViewGroup.LayoutParams p = container.getLayoutParams();
                     p.width = newW;
                     p.height = newH;
                     container.setLayoutParams(p);
                     return true;
+
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     return true;
-                default:
-                    return false;
             }
+            return false;
         });
-
-        final int[] savedWidth = {defaultWidth};
-        final int[] savedHeight = {defaultHeight};
-
-        minBtn.setOnClickListener(v -> {
-            savedWidth[0] = container.getWidth();
-            savedHeight[0] = container.getHeight();
-
-            contentLayout.setVisibility(View.GONE);
-            resizeHandle.setVisibility(View.GONE);
-            container.setBackground(null);
-            miniBubble.setVisibility(View.VISIBLE);
-
-            ViewGroup.LayoutParams p = container.getLayoutParams();
-            p.width = (int) (38 * density);
-            p.height = (int) (38 * density);
-            container.setLayoutParams(p);
-
-            setClientLowSpecMode(webView, true);
-        });
-
-        miniBubble.setOnClickListener(v -> {
-            miniBubble.setVisibility(View.GONE);
-            contentLayout.setVisibility(View.VISIBLE);
-            resizeHandle.setVisibility(View.VISIBLE);
-            container.setBackground(bg);
-
-            ViewGroup.LayoutParams p = container.getLayoutParams();
-            p.width = savedWidth[0];
-            p.height = savedHeight[0];
-            container.setLayoutParams(p);
-
-            setClientLowSpecMode(webView, false);
-        });
-
-        miniBubble.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    dX[0] = container.getX() - event.getRawX();
-                    dY[0] = container.getY() - event.getRawY();
-                    return false;
-                case MotionEvent.ACTION_MOVE:
-                    if (Math.abs(event.getRawX() + dX[0] - container.getX()) > 5 ||
-                            Math.abs(event.getRawY() + dY[0] - container.getY()) > 5) {
-                        container.setX(event.getRawX() + dX[0]);
-                        container.setY(event.getRawY() + dY[0]);
-                        return true;
-                    }
-                    return false;
-                default:
-                    return false;
-            }
-        });
-    }
-
-    private Button createBarButton(String text, int sizePx, float density) {
-        Button b = new Button(this);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(sizePx, (int) (26 * density));
-        p.setMarginStart((int) (2 * density));
-        b.setLayoutParams(p);
-        b.setText(text);
-        b.setTextColor(Color.WHITE);
-        b.setTextSize(11);
-        b.setPadding(0, 0, 0, 0);
-        b.setBackgroundColor(Color.parseColor("#444450"));
-        return b;
     }
 
     private void toggleSwapClient(int overlayIndex) {
@@ -350,10 +312,10 @@ public class MainActivity extends Activity {
         String urlTarget = targetView.getUrl();
 
         if (activeSwapIndex == overlayIndex) {
-            Toast.makeText(this, "Zurück zum Hauptfenster gewechselt", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Zurück zum Hauptfenster", Toast.LENGTH_SHORT).show();
             activeSwapIndex = -1;
         } else {
-            Toast.makeText(this, "Session getauscht mit Vollbild!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Session mit Vollbild getauscht!", Toast.LENGTH_SHORT).show();
             activeSwapIndex = overlayIndex;
         }
 
@@ -380,13 +342,13 @@ public class MainActivity extends Activity {
             int row = i / cols;
 
             ViewGroup.LayoutParams p = c.getLayoutParams();
-            p.width = tileW - 10;
-            p.height = tileH - 10;
+            p.width = tileW - 8;
+            p.height = tileH - 8;
             c.setLayoutParams(p);
-            c.setX(col * tileW + 5);
-            c.setY(row * tileH + 5);
+            c.setX(col * tileW + 4);
+            c.setY(row * tileH + 4);
         }
-        Toast.makeText(this, "Grid-Preset angewendet!", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Grid angewendet!", Toast.LENGTH_SHORT).show();
     }
 
     private void setClientLowSpecMode(WebView wv, boolean enableLowSpec) {
@@ -417,52 +379,6 @@ public class MainActivity extends Activity {
         wv.evaluateJavascript(js, null);
     }
 
-    private void handleQuickLogin(int clientNum, int webViewIndex) {
-        String keyUser = "user_c" + clientNum;
-        String keyPass = "pass_c" + clientNum;
-        String savedUser = prefs.getString(keyUser, "");
-        String savedPass = prefs.getString(keyPass, "");
-
-        if (savedUser.isEmpty() || savedPass.isEmpty()) {
-            LinearLayout l = new LinearLayout(this);
-            l.setOrientation(LinearLayout.VERTICAL);
-            l.setPadding(40, 20, 40, 10);
-
-            final EditText editUser = new EditText(this);
-            editUser.setHint("Account / E-Mail für C" + clientNum);
-            final EditText editPass = new EditText(this);
-            editPass.setHint("Passwort");
-            l.addView(editUser);
-            l.addView(editPass);
-
-            new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                    .setTitle("Zugangsdaten speichern (C" + clientNum + ")")
-                    .setView(l)
-                    .setPositiveButton("Speichern & Einloggen", (d, w) -> {
-                        String u = editUser.getText().toString().trim();
-                        String p = editPass.getText().toString().trim();
-                        prefs.edit().putString(keyUser, u).putString(keyPass, p).apply();
-                        injectLogin(activeWebViews.get(webViewIndex), u, p);
-                    })
-                    .setNegativeButton("Abbrechen", null)
-                    .show();
-        } else {
-            injectLogin(activeWebViews.get(webViewIndex), savedUser, savedPass);
-            Toast.makeText(this, "Logindaten für C" + clientNum + " übermittelt", Toast.LENGTH_SHORT).show();
-        }
-    }
-
-    private void injectLogin(WebView wv, String username, String password) {
-        if (wv == null) return;
-        String js = "(function() {" +
-                "  var userInputs = document.querySelectorAll('input[type=email], input[type=text]');" +
-                "  var passInputs = document.querySelectorAll('input[type=password]');" +
-                "  if(userInputs.length > 0) { userInputs[0].value = '" + username + "'; userInputs[0].dispatchEvent(new Event('input', { bubbles: true })); }" +
-                "  if(passInputs.length > 0) { passInputs[0].value = '" + password + "'; passInputs[0].dispatchEvent(new Event('input', { bubbles: true })); }" +
-                "})();";
-        wv.evaluateJavascript(js, null);
-    }
-
     @SuppressLint("SetJavaScriptEnabled")
     private void configureWebView(WebView view) {
         WebSettings s = view.getSettings();
@@ -488,6 +404,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        hideSystemUI();
         for (WebView w : activeWebViews) {
             if (w != null) w.onResume();
         }
