@@ -7,8 +7,12 @@
 
     <application
         android:label="Flyff MultiClient"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:hardwareAccelerated="true"
-        android:largeHeap="true">
+        android:largeHeap="true"
+        android:usesCleartextTraffic="true">
+        
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -19,4 +23,5 @@
             </intent-filter>
         </activity>
     </application>
+
 </manifest>
