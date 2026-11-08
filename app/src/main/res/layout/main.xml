@@ -5,15 +5,15 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Haupt-Client (Vollbild) -->
+    <!-- Client 1: Hauptfenster (Vollbild) -->
     <WebView
         android:id="@+id/webView1"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- F-Tool Button für Hauptaccount -->
+    <!-- F-Tool Button für Hauptaccount (oben links) -->
     <Button
-        android:id="@+id/btnFtoolMain"
+        android:id="@+id/btnFtool1"
         android:layout_width="wrap_content"
         android:layout_height="36dp"
         android:layout_gravity="top|start"
@@ -21,67 +21,185 @@
         android:background="#88000000"
         android:paddingLeft="10dp"
         android:paddingRight="10dp"
-        android:text="FTool 1: OFF"
+        android:text="FT 1: OFF"
         android:textColor="#FFFFFF"
         android:textSize="12sp" />
 
-    <!-- Overlay-Container (Zweit-Account) -->
+    <!-- Overlay-Container: Client 2 -->
     <LinearLayout
-        android:id="@+id/overlayContainer"
-        android:layout_width="320dp"
-        android:layout_height="220dp"
+        android:id="@+id/overlayContainer2"
+        android:layout_width="280dp"
+        android:layout_height="190dp"
         android:layout_gravity="top|end"
-        android:layout_margin="12dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
         android:background="#222226"
         android:orientation="vertical">
 
-        <!-- Obere Leiste: Drag-Handle + Buttons -->
         <LinearLayout
-            android:id="@+id/dragHandle"
+            android:id="@+id/dragHandle2"
             android:layout_width="match_parent"
-            android:layout_height="40dp"
+            android:layout_height="36dp"
             android:background="#33333D"
             android:gravity="center_vertical"
             android:orientation="horizontal"
             android:paddingStart="8dp"
             android:paddingEnd="4dp">
 
-            <!-- Zieh-Bereich / Titel -->
             <TextView
                 android:layout_width="0dp"
                 android:layout_height="match_parent"
                 android:layout_weight="1"
                 android:gravity="center_vertical"
-                android:text="::: Drag here"
+                android:text="::: C2 (RM)"
                 android:textColor="#AAAAAA"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <Button
-                android:id="@+id/btnFtoolOverlay"
+                android:id="@+id/btnFtool2"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="28dp"
                 android:background="#555566"
-                android:paddingLeft="8dp"
-                android:paddingRight="8dp"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
                 android:text="FT 2: OFF"
                 android:textColor="#FFFFFF"
-                android:textSize="11sp" />
+                android:textSize="10sp" />
 
             <Button
-                android:id="@+id/btnToggleSize"
-                android:layout_width="36dp"
-                android:layout_height="32dp"
+                android:id="@+id/btnToggle2"
+                android:layout_width="32dp"
+                android:layout_height="28dp"
                 android:layout_marginStart="4dp"
                 android:background="#555566"
                 android:text="—"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp" />
+                android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- WebView des Zweit-Accounts -->
         <WebView
             android:id="@+id/webView2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- Overlay-Container: Client 3 -->
+    <LinearLayout
+        android:id="@+id/overlayContainer3"
+        android:layout_width="280dp"
+        android:layout_height="190dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="60dp"
+        android:layout_marginEnd="10dp"
+        android:background="#222226"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/dragHandle3"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="#2E3B4E"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:text="::: C3"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnFtool3"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="#4A5B73"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:text="FT 3: OFF"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/btnToggle3"
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="#4A5B73"
+                android:text="—"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <WebView
+            android:id="@+id/webView3"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- Overlay-Container: Client 4 -->
+    <LinearLayout
+        android:id="@+id/overlayContainer4"
+        android:layout_width="280dp"
+        android:layout_height="190dp"
+        android:layout_gravity="top|end"
+        android:layout_marginTop="110dp"
+        android:layout_marginEnd="10dp"
+        android:background="#222226"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/dragHandle4"
+            android:layout_width="match_parent"
+            android:layout_height="36dp"
+            android:background="#4A344E"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:text="::: C4"
+                android:textColor="#AAAAAA"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/btnFtool4"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="#6E4D74"
+                android:paddingLeft="6dp"
+                android:paddingRight="6dp"
+                android:text="FT 4: OFF"
+                android:textColor="#FFFFFF"
+                android:textSize="10sp" />
+
+            <Button
+                android:id="@+id/btnToggle4"
+                android:layout_width="32dp"
+                android:layout_height="28dp"
+                android:layout_marginStart="4dp"
+                android:background="#6E4D74"
+                android:text="—"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <WebView
+            android:id="@+id/webView4"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1" />
