@@ -12,6 +12,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -23,7 +24,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -50,8 +50,9 @@ public class MainActivity extends Activity {
     private final List<WebView> activeWebViews = new ArrayList<>();
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
 
-    private int activeSwapIndex = -1; // -1 = Normal, sonst Index des aktuell im Vollbild sitzenden Overlays
+    private int activeSwapIndex = -1;
 
+    // GitHub Repo für Update-Checks
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
 
     private final int[] CLIENT_COLORS = {
@@ -87,6 +88,7 @@ public class MainActivity extends Activity {
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
+        // Update-Prüfung beim Starten ausführen
         checkForUpdates();
     }
 
@@ -112,7 +114,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // UPDATE CHECKER (GitHub API)
+    // UPDATE CHECKER & INSTALLER
     // ==========================================
     private void checkForUpdates() {
         new Thread(() -> {
@@ -198,7 +200,7 @@ public class MainActivity extends Activity {
     private void showUpdateDialog(String currentVer, String newVer, String downloadUrl) {
         new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Neues Update verfügbar!")
-                .setMessage("Aktuell: v" + currentVer + "\nNeu: v" + newVer + "\n\nMöchtest du die neueste Version herunterladen?")
+                .setMessage("Installiert: v" + currentVer + "\nNeueste Version: v" + newVer + "\n\nJetzt aktualisieren?")
                 .setCancelable(false)
                 .setPositiveButton("Aktualisieren", (dialog, which) -> downloadAndInstallApk(downloadUrl))
                 .setNegativeButton("Später", (dialog, which) -> promptSessionCount())
@@ -206,7 +208,7 @@ public class MainActivity extends Activity {
     }
 
     private void downloadAndInstallApk(String fileUrl) {
-        Toast.makeText(this, "Lade Update herunter...", Toast.LENGTH_LONG).show();
+        Toast.makeText(this, "Lade Update herunter...", Toast.LENGTH_SHORT).show();
         new Thread(() -> {
             try {
                 URL url = new URL(fileUrl);
@@ -233,6 +235,7 @@ public class MainActivity extends Activity {
                 new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
             } catch (Exception e) {
                 new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(this, "Direkter Download fehlgeschlagen, öffne Browser...", Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
                     promptSessionCount();
@@ -243,18 +246,30 @@ public class MainActivity extends Activity {
 
     private void installApk(File apkFile) {
         try {
+            // Berechtigung für unbekannte Quellen prüfen (ab Android 8 / API 26)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!getPackageManager().canRequestPackageInstalls()) {
+                    Toast.makeText(this, "Bitte 'Unbekannte Apps installieren' erlauben", Toast.LENGTH_LONG).show();
+                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                    settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                    startActivity(settingsIntent);
+                    return;
+                }
+            }
+
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".provider", apkFile);
             Intent installIntent = new Intent(Intent.ACTION_VIEW);
             installIntent.setDataAndType(contentUri, "application/vnd.android.package-archive");
             installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(installIntent);
         } catch (Exception e) {
+            Toast.makeText(this, "Fehler beim Starten des Installers: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             promptSessionCount();
         }
     }
 
     // ==========================================
-    // MULTI-SESSION HANDLING
+    // MULTI-SESSION OVERLAYS & VIEW SWAP
     // ==========================================
     private void promptSessionCount() {
         final String[] options = {
@@ -295,6 +310,7 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
+        // WebView füllt das Overlay aus
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -305,6 +321,7 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
+        // Rundes Farbbadge
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
@@ -322,6 +339,7 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         container.addView(floatingBadge);
 
+        // Resize-Handle unten rechts
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
@@ -361,12 +379,11 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
-                    // Klick: Minimieren / Wiederherstellen
+                    // Klick (unter 250ms): Minimieren / Wiederherstellen
                     if (duration < 250) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
-                            // Webview im Container verstecken
                             View clientView = container.getChildAt(0);
                             if (clientView != null) clientView.setVisibility(View.GONE);
                             resizeHandle.setVisibility(View.GONE);
@@ -392,7 +409,7 @@ public class MainActivity extends Activity {
                         return true;
                     }
 
-                    // Langer Druck: Vollbild swap ohne Neuladen
+                    // Langer Druck (ab 600ms): Echter View-Tausch ohne Neuladen
                     if (duration >= 600) {
                         swapViewsWithoutReload(overlayIndex);
                         return true;
@@ -406,7 +423,7 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // Resize-Logik
+        // Diagonales Resizen
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
@@ -443,33 +460,25 @@ public class MainActivity extends Activity {
         });
     }
 
-    // ==========================================
-    // ECHTER VIEW-TAUSCH OHNE NEULADEN
-    // ==========================================
     private void swapViewsWithoutReload(int targetOverlayIndex) {
         FrameLayout targetContainer = overlayContainers.get(targetOverlayIndex);
 
-        // Die beiden WebViews
-        WebView viewA = (WebView) rootContainer.getChildAt(0); // Liegt aktuell im Vollbild
-        WebView viewB = (WebView) targetContainer.getChildAt(0); // Liegt im Ziel-Overlay
+        WebView viewA = (WebView) rootContainer.getChildAt(0);
+        WebView viewB = (WebView) targetContainer.getChildAt(0);
 
         if (viewA == null || viewB == null) return;
 
-        // Aus ihren Eltern-Containern lösen
         rootContainer.removeView(viewA);
         targetContainer.removeView(viewB);
 
-        // Layout-Parameter anpassen
         viewB.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         viewA.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // An Index 0 wieder einhängen (unter den Buttons/Handles)
         rootContainer.addView(viewB, 0);
         targetContainer.addView(viewA, 0);
 
-        // Audio-Sync: Das Vollbild-Fenster erhält Ton, das Overlay wird stummgeschaltet
         setClientAudioMuted(viewB, false);
         setClientAudioMuted(viewA, true);
 
