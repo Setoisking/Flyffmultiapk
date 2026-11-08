@@ -3,10 +3,18 @@ package com.flyff.multiclient;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
@@ -24,6 +32,18 @@ import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.core.content.FileProvider;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -35,6 +55,9 @@ public class MainActivity extends Activity {
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
 
     private int activeSwapIndex = -1;
+
+    // GitHub Repo für Update-Checks
+    private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
 
     private final int[] CLIENT_COLORS = {
             Color.parseColor("#00E676"), // C2: Grün
@@ -50,7 +73,6 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Header und TitleBar komplett abschalten
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -71,7 +93,9 @@ public class MainActivity extends Activity {
         activeWebViews.add(mainWebView);
 
         addGridPresetButton();
-        promptSessionCount();
+
+        // 1. Zuerst prüfen, ob ein GitHub-Release als Update vorliegt
+        checkForUpdates();
     }
 
     private void hideSystemUI() {
@@ -95,6 +119,155 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ==========================================
+    // UPDATE CHECKER (GitHub API)
+    // ==========================================
+    private void checkForUpdates() {
+        new Thread(() -> {
+            try {
+                URL url = new URL("https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest");
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setRequestProperty("Accept", "application/vnd.github.v3+json");
+                conn.setConnectTimeout(5000);
+                conn.setReadTimeout(5000);
+
+                if (conn.getResponseCode() == 200) {
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
+                    }
+                    reader.close();
+
+                    JSONObject releaseJson = new JSONObject(response.toString());
+                    String latestTag = releaseJson.optString("tag_name", "").replace("v", "").trim();
+
+                    // APK Download Link suchen
+                    String apkDownloadUrl = null;
+                    JSONArray assets = releaseJson.optJSONArray("assets");
+                    if (assets != null) {
+                        for (int i = 0; i < assets.length(); i++) {
+                            JSONObject asset = assets.getJSONObject(i);
+                            String assetName = asset.optString("name", "");
+                            if (assetName.endsWith(".apk")) {
+                                apkDownloadUrl = asset.optString("browser_download_url", null);
+                                break;
+                            }
+                        }
+                    }
+
+                    String currentVersion = getAppVersionName();
+                    final String downloadUrlFinal = apkDownloadUrl;
+                    final String latestVersionFinal = latestTag;
+
+                    if (isNewerVersion(currentVersion, latestTag) && downloadUrlFinal != null) {
+                        new Handler(Looper.getMainLooper()).post(() ->
+                                showUpdateDialog(currentVersion, latestVersionFinal, downloadUrlFinal)
+                        );
+                        return;
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+
+            // Kein Update verfügbar oder Offline -> direkt Sessions wählen
+            new Handler(Looper.getMainLooper()).post(this::promptSessionCount);
+        }).start();
+    }
+
+    private String getAppVersionName() {
+        try {
+            PackageInfo pInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            return pInfo.versionName != null ? pInfo.versionName.replace("v", "").trim() : "1.0.0";
+        } catch (Exception e) {
+            return "1.0.0";
+        }
+    }
+
+    private boolean isNewerVersion(String current, String remote) {
+        if (remote == null || remote.isEmpty()) return false;
+        try {
+            String[] currParts = current.split("\\.");
+            String[] remoteParts = remote.split("\\.");
+            int length = Math.max(currParts.length, remoteParts.length);
+
+            for (int i = 0; i < length; i++) {
+                int c = i < currParts.length ? Integer.parseInt(currParts[i].replaceAll("[^0-9]", "")) : 0;
+                int r = i < remoteParts.length ? Integer.parseInt(remoteParts[i].replaceAll("[^0-9]", "")) : 0;
+                if (r > c) return true;
+                if (r < c) return false;
+            }
+        } catch (Exception e) {
+            return !current.equalsIgnoreCase(remote);
+        }
+        return false;
+    }
+
+    private void showUpdateDialog(String currentVer, String newVer, String downloadUrl) {
+        new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Neues Update verfügbar!")
+                .setMessage("Aktuell: v" + currentVer + "\nNeu: v" + newVer + "\n\nMöchtest du die neueste Version herunterladen und installieren?")
+                .setCancelable(false)
+                .setPositiveButton("Aktualisieren", (dialog, which) -> downloadAndInstallApk(downloadUrl))
+                .setNegativeButton("Später", (dialog, which) -> promptSessionCount())
+                .show();
+    }
+
+    private void downloadAndInstallApk(String fileUrl) {
+        Toast.makeText(this, "Lade Update herunter...", Toast.LENGTH_LONG).show();
+        new Thread(() -> {
+            try {
+                URL url = new URL(fileUrl);
+                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestProperty("Accept-Encoding", "identity");
+                conn.connect();
+
+                File cachePath = new File(getExternalCacheDir(), "updates");
+                if (!cachePath.exists()) cachePath.mkdirs();
+                File outputFile = new File(cachePath, "update.apk");
+
+                InputStream in = conn.getInputStream();
+                FileOutputStream out = new FileOutputStream(outputFile);
+
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+                out.flush();
+                out.close();
+                in.close();
+
+                new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
+            } catch (Exception e) {
+                new Handler(Looper.getMainLooper()).post(() -> {
+                    Toast.makeText(this, "Download fehlgeschlagen. Starte Browser...", Toast.LENGTH_SHORT).show();
+                    Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
+                    startActivity(browserIntent);
+                    promptSessionCount();
+                });
+            }
+        }).start();
+    }
+
+    private void installApk(File apkFile) {
+        try {
+            Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".provider", apkFile);
+            Intent installIntent = new Intent(Intent.ACTION_VIEW);
+            installIntent.setDataAndType(contentUri, "application/vnd.android.package-archive");
+            installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(installIntent);
+        } catch (Exception e) {
+            Toast.makeText(this, "Fehler beim Starten des Installers.", Toast.LENGTH_SHORT).show();
+            promptSessionCount();
+        }
+    }
+
+    // ==========================================
+    // MULTI-SESSION LAYOUT & HANDLING
+    // ==========================================
     private void addGridPresetButton() {
         float density = getResources().getDisplayMetrics().density;
         Button gridBtn = new Button(this);
@@ -135,7 +308,6 @@ public class MainActivity extends Activity {
         float density = getResources().getDisplayMetrics().density;
         final int overlayIndex = index;
 
-        // Haupt-Container
         FrameLayout container = new FrameLayout(this);
         int defaultWidth = (int) (250 * density);
         int defaultHeight = (int) (160 * density);
@@ -151,7 +323,6 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        // WebView füllt das komplette Overlay aus (kein Header)
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -162,7 +333,6 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // Rundes Badge oben links (dient als Drag-Handle, Klick = Minimieren, Langklick = Swap)
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
@@ -180,7 +350,6 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         container.addView(floatingBadge);
 
-        // Resize-Handle unten rechts
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
@@ -194,7 +363,6 @@ public class MainActivity extends Activity {
         overlayLayer.addView(container);
         overlayContainers.add(container);
 
-        // Drag & Drop über das runde Badge
         final float[] dX = {0};
         final float[] dY = {0};
         final long[] downTime = {0};
@@ -221,10 +389,8 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
-                    // Klick (unter 250ms): Minimieren / Wiederherstellen
                     if (duration < 250) {
                         if (!isMinimized[0]) {
-                            // Minimieren auf runden Kreis
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
                             webView.setVisibility(View.GONE);
@@ -238,7 +404,6 @@ public class MainActivity extends Activity {
                             isMinimized[0] = true;
                             setClientLowSpecMode(webView, true);
                         } else {
-                            // Wiederherstellen
                             webView.setVisibility(View.VISIBLE);
                             resizeHandle.setVisibility(View.VISIBLE);
                             container.setBackground(bg);
@@ -253,7 +418,6 @@ public class MainActivity extends Activity {
                         return true;
                     }
 
-                    // Langer Druck (über 700ms): Quick-Swap mit Vollbild-Main
                     if (duration >= 700) {
                         toggleSwapClient(overlayIndex);
                         return true;
@@ -267,7 +431,6 @@ public class MainActivity extends Activity {
             return false;
         });
 
-        // Resize-Logik
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
