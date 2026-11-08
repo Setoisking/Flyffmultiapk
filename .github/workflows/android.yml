@@ -1,9 +1,12 @@
-name: Build APK
+name: Build and Release APK
 
 on:
   push:
     branches: [ main ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -27,9 +30,19 @@ jobs:
       - name: Android Debug APK bauen
         run: gradle :app:assembleDebug --no-daemon --stacktrace
 
-      - name: APK als Download bereitstellen
-        uses: actions/upload-artifact@v4
+      - name: APK umbenennen
+        run: |
+          mkdir -p release-files
+          cp app/build/outputs/apk/debug/*.apk release-files/FlyffMultiClient.apk
+
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
         with:
-          name: FlyffMultiClient-APK
-          path: app/build/outputs/apk/debug/*.apk
+          tag_name: v1.0.${{ github.run_number }}
+          name: Flyff MultiClient v1.0.${{ github.run_number }}
+          draft: false
+          prerelease: false
+          files: release-files/FlyffMultiClient.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
