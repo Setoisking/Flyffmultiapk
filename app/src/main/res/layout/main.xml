@@ -11,7 +11,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- F-Tool Button für Hauptaccount (oben links) -->
+    <!-- F-Tool Button für Hauptaccount -->
     <Button
         android:id="@+id/btnFtoolMain"
         android:layout_width="wrap_content"
@@ -26,31 +26,42 @@
         android:textSize="12sp" />
 
     <!-- Overlay-Container (Zweit-Account) -->
-    <FrameLayout
+    <LinearLayout
         android:id="@+id/overlayContainer"
         android:layout_width="320dp"
         android:layout_height="220dp"
         android:layout_gravity="top|end"
         android:layout_margin="12dp"
-        android:background="#1E1E1E">
+        android:background="#222226"
+        android:orientation="vertical">
 
-        <WebView
-            android:id="@+id/webView2"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
-        <!-- Bedienleiste für Zweit-Account -->
+        <!-- Obere Leiste: Drag-Handle + Buttons -->
         <LinearLayout
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="top|end"
-            android:orientation="horizontal">
+            android:id="@+id/dragHandle"
+            android:layout_width="match_parent"
+            android:layout_height="40dp"
+            android:background="#33333D"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
+
+            <!-- Zieh-Bereich / Titel -->
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:text="::: Drag here"
+                android:textColor="#AAAAAA"
+                android:textSize="12sp"
+                android:textStyle="bold" />
 
             <Button
                 android:id="@+id/btnFtoolOverlay"
                 android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:background="#88000000"
+                android:layout_height="32dp"
+                android:background="#555566"
                 android:paddingLeft="8dp"
                 android:paddingRight="8dp"
                 android:text="FT 2: OFF"
@@ -59,12 +70,20 @@
 
             <Button
                 android:id="@+id/btnToggleSize"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:background="#AA000000"
+                android:layout_width="36dp"
+                android:layout_height="32dp"
+                android:layout_marginStart="4dp"
+                android:background="#555566"
                 android:text="—"
                 android:textColor="#FFFFFF"
-                android:textSize="16sp" />
+                android:textSize="14sp" />
         </LinearLayout>
-    </FrameLayout>
+
+        <!-- WebView des Zweit-Accounts -->
+        <WebView
+            android:id="@+id/webView2"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
 </FrameLayout>
