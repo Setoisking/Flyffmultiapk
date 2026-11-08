@@ -27,7 +27,8 @@
             android:name=".MainActivity"
             android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
             android:exported="true"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize">
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode|keyboardHidden">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
