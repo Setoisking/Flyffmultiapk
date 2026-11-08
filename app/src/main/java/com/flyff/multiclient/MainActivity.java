@@ -34,11 +34,11 @@ public class MainActivity extends Activity {
     private boolean isFtool1Running = false;
     private boolean isFtool2Running = false;
 
-    // Intervalle in Millisekunden (z. B. 1500 ms = alle 1,5 Sekunden)
+    // Intervalle in Millisekunden (1500 ms = alle 1,5s / 2000 ms = alle 2s)
     private final int INTERVAL_CLIENT_1 = 1500;
     private final int INTERVAL_CLIENT_2 = 2000;
 
-    // Tasten, die gesendet werden (Standard: Taste '1' für Slot 1 der Actionbar)
+    // Standard-Taste (Slot 1 der Quick-Slot-Leiste)
     private final String KEY_CLIENT_1 = "1";
     private final String KEY_CLIENT_2 = "1";
 
@@ -67,7 +67,7 @@ public class MainActivity extends Activity {
         webView1.loadUrl("https://universe.flyff.com/play");
         webView2.loadUrl("https://universe.flyff.com/play");
 
-        // Drag & Drop des Zweit-Fensters
+        // Drag & Drop für das Overlay
         overlayContainer.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -95,7 +95,7 @@ public class MainActivity extends Activity {
             } else {
                 params.width = (int) (140 * density);
                 params.height = (int) (48 * density);
-                webView2.setVisibility(View.INVISIBLE); // WebView läuft unsichtbar im Hintergrund weiter
+                webView2.setVisibility(View.INVISIBLE);
                 btnToggle.setText("+");
                 isMinimized = true;
             }
@@ -116,7 +116,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // F-Tool Button Account 2 (z. B. Ringmaster / Buffer)
+        // F-Tool Button Account 2 (funktioniert auch minimiert)
         btnFtoolOverlay.setOnClickListener(v -> {
             isFtool2Running = !isFtool2Running;
             if (isFtool2Running) {
@@ -131,7 +131,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    // Schleife für Account 1
     private final Runnable ftool1Runnable = new Runnable() {
         @Override
         public void run() {
@@ -142,7 +141,6 @@ public class MainActivity extends Activity {
         }
     };
 
-    // Schleife für Account 2 (funktioniert auch bei minimiertem Fenster)
     private final Runnable ftool2Runnable = new Runnable() {
         @Override
         public void run() {
@@ -153,9 +151,6 @@ public class MainActivity extends Activity {
         }
     };
 
-    /**
-     * Sendet ein synthetisches Tastatur-Event an den Canvas von Flyff Universe.
-     */
     private void pressGameKey(WebView targetWebView, String key) {
         String js = "(function() {" +
                 "  var target = document.querySelector('canvas') || window;" +
@@ -190,7 +185,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture = false;
+        s.setMediaPlaybackRequiresUserGesture(false);
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setUseWideViewPort(true);
         s.setLoadWithOverviewMode(true);
@@ -216,7 +211,6 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Kein Pause-Aufruf, damit Socket und F-Tool im Hintergrund aktiv bleiben
     }
 
     @Override
