@@ -33,10 +33,10 @@ public class MainActivity extends Activity {
     private FrameLayout rootContainer;
     private FrameLayout overlayLayer;
     private final List<WebView> activeWebViews = new ArrayList<>();
-    private final List<FrameLayout> overlayContainers = new List<>();
+    private final List<FrameLayout> overlayContainers = new ArrayList<>();
     private SharedPreferences prefs;
 
-    private int activeSwapIndex = -1; // -1 = Normalzustand, sonst Index des geswapten Overlays
+    private int activeSwapIndex = -1;
 
     private final int[] CLIENT_COLORS = {
             Color.parseColor("#00E676"), // C2: Grün
@@ -176,7 +176,7 @@ public class MainActivity extends Activity {
             btnMute.setText(isMuted[0] ? "🔇" : "🔊");
         });
 
-        // Quick-Swap Button (⇄)
+        // Quick-Swap Button
         Button btnSwap = createBarButton("⇄", (int) (24 * density), density);
         btnSwap.setOnClickListener(v -> toggleSwapClient(overlayIndex));
 
@@ -197,7 +197,7 @@ public class MainActivity extends Activity {
         webView.setLayoutParams(webParams);
         configureWebView(webView);
         webView.loadUrl("https://universe.flyff.com/play");
-        setClientAudioMuted(webView, true); // Overlays standardmäßig stummschalten
+        setClientAudioMuted(webView, true);
         activeWebViews.add(webView);
 
         contentLayout.addView(titleBar);
@@ -229,12 +229,249 @@ public class MainActivity extends Activity {
         overlayLayer.addView(container);
         overlayContainers.add(container);
 
-        // Drag & Drop
+        // 1. Drag & Drop Logik
         final float[] dX = {0};
         final float[] dY = {0};
         View.OnTouchListener dragListener = (v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    dX[0] = container.getX() - event.getRawX();
+                    dY[0] = container.getY() - event.getRawY();
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    container.setX(event.getRawX() + dX[0]);
+                    container.setY(event.getRawY() + dY[0]);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    return true;
+                default:
+                    return false;
+            }
+        };
+        titleBar.setOnTouchListener(dragListener);
+        dragArea.setOnTouchListener(dragListener);
+
+        // 2. Diagonales Resize
+        final float[] startX = {0};
+        final float[] startY = {0};
+        final int[] startW = {0};
+        final int[] startH = {0};
+        resizeHandle.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX[0] = event.getRawX();
+                    startY[0] = event.getRawY();
+                    startW[0] = container.getWidth();
+                    startH[0] = container.getHeight();
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    float deltaX = event.getRawX() - startX[0];
+                    float deltaY = event.getRawY() - startY[0];
+                    int newW = (int) Math.max(160 * density, startW[0] + deltaX);
+                    int newH = (int) Math.max(120 * density, startH[0] + deltaY);
+                    ViewGroup.LayoutParams p = container.getLayoutParams();
+                    p.width = newW;
+                    p.height = newH;
+                    container.setLayoutParams(p);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    return true;
+                default:
+                    return false;
+            }
+        });
+
+        // 3. Minimieren & Wiederherstellen
+        final int[] savedWidth = {defaultWidth};
+        final int[] savedHeight = {defaultHeight};
+
+        minBtn.setOnClickListener(v -> {
+            savedWidth[0] = container.getWidth();
+            savedHeight[0] = container.getHeight();
+
+            contentLayout.setVisibility(View.GONE);
+            resizeHandle.setVisibility(View.GONE);
+            container.setBackground(null);
+            miniBubble.setVisibility(View.VISIBLE);
+
+            ViewGroup.LayoutParams p = container.getLayoutParams();
+            p.width = (int) (38 * density);
+            p.height = (int) (38 * density);
+            container.setLayoutParams(p);
+
+            setClientLowSpecMode(webView, true);
+        });
+
+        miniBubble.setOnClickListener(v -> {
+            miniBubble.setVisibility(View.GONE);
+            contentLayout.setVisibility(View.VISIBLE);
+            resizeHandle.setVisibility(View.VISIBLE);
+            container.setBackground(bg);
+
+            ViewGroup.LayoutParams p = container.getLayoutParams();
+            p.width = savedWidth[0];
+            p.height = savedHeight[0];
+            container.setLayoutParams(p);
+
+            setClientLowSpecMode(webView, false);
+        });
+
+        miniBubble.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dX[0] = container.getX() - event.getRawX();
+                    dY[0] = container.getY() - event.getRawY();
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getRawX() + dX[0] - container.getX()) > 5 ||
+                            Math.abs(event.getRawY() + dY[0] - container.getY()) > 5) {
+                        container.setX(event.getRawX() + dX[0]);
+                        container.setY(event.getRawY() + dY[0]);
+                        return true;
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    private Button createBarButton(String text, int sizePx, float density) {
+        Button b = new Button(this);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(sizePx, (int) (26 * density));
+        p.setMarginStart((int) (2 * density));
+        b.setLayoutParams(p);
+        b.setText(text);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(11);
+        b.setPadding(0, 0, 0, 0);
+        b.setBackgroundColor(Color.parseColor("#444450"));
+        return b;
+    }
+
+    private void toggleSwapClient(int overlayIndex) {
+        WebView mainView = activeWebViews.get(0);
+        WebView targetView = activeWebViews.get(overlayIndex + 1);
+
+        String urlMain = mainView.getUrl();
+        String urlTarget = targetView.getUrl();
+
+        if (activeSwapIndex == overlayIndex) {
+            Toast.makeText(this, "Zurück zum Hauptfenster gewechselt", Toast.LENGTH_SHORT).show();
+            activeSwapIndex = -1;
+        } else {
+            Toast.makeText(this, "Session getauscht mit Vollbild!", Toast.LENGTH_SHORT).show();
+            activeSwapIndex = overlayIndex;
+        }
+
+        mainView.loadUrl(urlTarget != null ? urlTarget : "https://universe.flyff.com/play");
+        targetView.loadUrl(urlMain != null ? urlMain : "https://universe.flyff.com/play");
+    }
+
+    private void applyGridLayout() {
+        int count = overlayContainers.size();
+        if (count == 0) return;
+
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        int screenW = dm.widthPixels;
+        int screenH = dm.heightPixels;
+
+        int cols = count >= 3 ? 2 : 1;
+        int rows = (int) Math.ceil((double) count / cols);
+        int tileW = screenW / cols;
+        int tileH = screenH / rows;
+
+        for (int i = 0; i < count; i++) {
+            FrameLayout c = overlayContainers.get(i);
+            int col = i % cols;
+            int row = i / cols;
+
+            ViewGroup.LayoutParams p = c.getLayoutParams();
+            p.width = tileW - 10;
+            p.height = tileH - 10;
+            c.setLayoutParams(p);
+            c.setX(col * tileW + 5);
+            c.setY(row * tileH + 5);
+        }
+        Toast.makeText(this, "Grid-Preset angewendet!", Toast.LENGTH_SHORT).show();
+    }
+
+    private void setClientLowSpecMode(WebView wv, boolean enableLowSpec) {
+        if (wv == null) return;
+        if (enableLowSpec) {
+            String js = "(function() {" +
+                    "  window.__origRAF = window.__origRAF || window.requestAnimationFrame;" +
+                    "  window.requestAnimationFrame = function(cb) {" +
+                    "    return setTimeout(function() { cb(performance.now()); }, 100);" +
+                    "  };" +
+                    "})();";
+            wv.evaluateJavascript(js, null);
+        } else {
+            String js = "(function() {" +
+                    "  if (window.__origRAF) { window.requestAnimationFrame = window.__origRAF; }" +
+                    "})();";
+            wv.evaluateJavascript(js, null);
+        }
+    }
+
+    private void setClientAudioMuted(WebView wv, boolean mute) {
+        if (wv == null) return;
+        String js = "(function() {" +
+                "  document.querySelectorAll('audio, video').forEach(function(el) {" +
+                "    el.muted = " + (mute ? "true" : "false") + ";" +
+                "  });" +
+                "})();";
+        wv.evaluateJavascript(js, null);
+    }
+
+    private void handleQuickLogin(int clientNum, int webViewIndex) {
+        String keyUser = "user_c" + clientNum;
+        String keyPass = "pass_c" + clientNum;
+        String savedUser = prefs.getString(keyUser, "");
+        String savedPass = prefs.getString(keyPass, "");
+
+        if (savedUser.isEmpty() || savedPass.isEmpty()) {
+            LinearLayout l = new LinearLayout(this);
+            l.setOrientation(LinearLayout.VERTICAL);
+            l.setPadding(40, 20, 40, 10);
+
+            final EditText editUser = new EditText(this);
+            editUser.setHint("Account / E-Mail für C" + clientNum);
+            final EditText editPass = new EditText(this);
+            editPass.setHint("Passwort");
+            l.addView(editUser);
+            l.addView(editPass);
+
+            new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                    .setTitle("Zugangsdaten speichern (C" + clientNum + ")")
+                    .setView(l)
+                    .setPositiveButton("Speichern & Einloggen", (d, w) -> {
+                        String u = editUser.getText().toString().trim();
+                        String p = editPass.getText().toString().trim();
+                        prefs.edit().putString(keyUser, u).putString(keyPass, p).apply();
+                        injectLogin(activeWebViews.get(webViewIndex), u, p);
+                    })
+                    .setNegativeButton("Abbrechen", null)
+                    .show();
+        } else {
+            injectLogin(activeWebViews.get(webViewIndex), savedUser, savedPass);
+            Toast.makeText(this, "Logindaten für C" + clientNum + " übermittelt", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void injectLogin(WebView wv, String username, String password) {
+        if (wv == null) return;
+        String js = "(function() {" +
+                "  var userInputs = document.querySelectorAll('input[type=email], input[type=text]');" +
+                "  var passInputs = document.querySelectorAll('input[type=password]');" +
+                "  if(userInputs.length > 0) { userInputs[0].value = '" + username + "'; userInputs[0].dispatchEvent(new Event('input', { bubbles: true })); }" +
+                "  if(passInputs.l         case MotionEvent.ACTION_DOWN:
                     dX[0] = container.getX() - event.getRawX();
                     dY[0] = container.getY() - event.getRawY();
                     v.getParent().requestDisallowInterceptTouchEvent(true);
