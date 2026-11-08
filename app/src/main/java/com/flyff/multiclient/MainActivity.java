@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
@@ -49,10 +50,9 @@ public class MainActivity extends Activity {
     private FrameLayout overlayLayer;
     private final List<WebView> activeWebViews = new ArrayList<>();
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
+    private SharedPreferences prefs;
 
     private int activeSwapIndex = -1;
-
-    // GitHub Repo für Update-Checks
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
 
     private final int[] CLIENT_COLORS = {
@@ -76,19 +76,15 @@ public class MainActivity extends Activity {
         setContentView(R.layout.main);
         hideSystemUI();
 
+        prefs = getSharedPreferences("NeuzOS_Config", MODE_PRIVATE);
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
 
         WebView mainWebView = findViewById(R.id.webView1);
-        CookieManager cookieManager = CookieManager.getInstance();
-        cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(mainWebView, true);
-
-        configureWebView(mainWebView);
+        configureWebView(mainWebView, 1);
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
-        // Update-Prüfung beim Starten ausführen
         checkForUpdates();
     }
 
@@ -114,7 +110,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // UPDATE CHECKER & INSTALLER
+    // UPDATE CHECKER (GitHub API)
     // ==========================================
     private void checkForUpdates() {
         new Thread(() -> {
@@ -235,7 +231,7 @@ public class MainActivity extends Activity {
                 new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
             } catch (Exception e) {
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Direkter Download fehlgeschlagen, öffne Browser...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Öffne Browser für Download...", Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
                     promptSessionCount();
@@ -246,7 +242,6 @@ public class MainActivity extends Activity {
 
     private void installApk(File apkFile) {
         try {
-            // Berechtigung für unbekannte Quellen prüfen (ab Android 8 / API 26)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 if (!getPackageManager().canRequestPackageInstalls()) {
                     Toast.makeText(this, "Bitte 'Unbekannte Apps installieren' erlauben", Toast.LENGTH_LONG).show();
@@ -263,13 +258,13 @@ public class MainActivity extends Activity {
             installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(installIntent);
         } catch (Exception e) {
-            Toast.makeText(this, "Fehler beim Starten des Installers: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             promptSessionCount();
         }
     }
 
     // ==========================================
-    // MULTI-SESSION OVERLAYS & VIEW SWAP
+    // MULTI-SESSION OVERLAYS & SESSION SEPARATION
     // ==========================================
     private void promptSessionCount() {
         final String[] options = {
@@ -310,18 +305,16 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        // WebView füllt das Overlay aus
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         webView.setLayoutParams(webParams);
-        configureWebView(webView);
+        configureWebView(webView, clientNumber);
         webView.loadUrl("https://universe.flyff.com/play");
         setClientAudioMuted(webView, true);
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // Rundes Farbbadge
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
@@ -339,7 +332,6 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         container.addView(floatingBadge);
 
-        // Resize-Handle unten rechts
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
@@ -379,7 +371,7 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
-                    // Klick (unter 250ms): Minimieren / Wiederherstellen
+                    // Klick (unter 250ms): Minimieren / Wiederherstellen mit FPS-Limiter
                     if (duration < 250) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
@@ -394,6 +386,7 @@ public class MainActivity extends Activity {
                             p.height = (int) (36 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
+                            setClientLowSpecMode(webView, true); // FPS auf 10 drosseln
                         } else {
                             View clientView = container.getChildAt(0);
                             if (clientView != null) clientView.setVisibility(View.VISIBLE);
@@ -405,6 +398,7 @@ public class MainActivity extends Activity {
                             p.height = savedHeight[0];
                             container.setLayoutParams(p);
                             isMinimized[0] = false;
+                            setClientLowSpecMode(webView, false); // FPS wieder normalisieren
                         }
                         return true;
                     }
@@ -491,6 +485,25 @@ public class MainActivity extends Activity {
         }
     }
 
+    // NeuzOS Low-Spec FPS Limiter
+    private void setClientLowSpecMode(WebView wv, boolean enableLowSpec) {
+        if (wv == null) return;
+        if (enableLowSpec) {
+            String js = "(function() {" +
+                    "  window.__origRAF = window.__origRAF || window.requestAnimationFrame;" +
+                    "  window.requestAnimationFrame = function(cb) {" +
+                    "    return setTimeout(function() { cb(performance.now()); }, 100);" + // drosselt auf ~10 FPS
+                    "  };" +
+                    "})();";
+            wv.evaluateJavascript(js, null);
+        } else {
+            String js = "(function() {" +
+                    "  if (window.__origRAF) { window.requestAnimationFrame = window.__origRAF; }" +
+                    "})();";
+            wv.evaluateJavascript(js, null);
+        }
+    }
+
     private void setClientAudioMuted(WebView wv, boolean mute) {
         if (wv == null) return;
         String js = "(function() {" +
@@ -502,7 +515,7 @@ public class MainActivity extends Activity {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void configureWebView(WebView view) {
+    private void configureWebView(WebView view, int clientSessionId) {
         WebSettings s = view.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -513,6 +526,15 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
+
+        // Multi-Profile Isolation: Eigener AppCache & WebDB-Pfad pro Client
+        File profileDir = new File(getFilesDir(), "client_profile_" + clientSessionId);
+        if (!profileDir.exists()) profileDir.mkdirs();
+        s.setDatabasePath(profileDir.getPath());
+
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(view, true);
 
         view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         view.setWebViewClient(new WebViewClient() {
