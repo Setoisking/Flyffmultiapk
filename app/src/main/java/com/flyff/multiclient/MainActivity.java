@@ -19,26 +19,21 @@ import android.widget.Button;
 
 public class MainActivity extends Activity {
 
-    private WebView webView1;
-    private WebView webView2;
-    private View overlayContainer;
-    private View dragHandle;
-    private Button btnToggle;
-    private Button btnFtoolMain;
-    private Button btnFtoolOverlay;
+    private WebView[] webViews = new WebView[4];
+    private View[] containers = new View[3];
+    private View[] dragHandles = new View[3];
+    private Button[] toggleButtons = new Button[3];
+    private Button[] ftoolButtons = new Button[4];
 
-    private boolean isMinimized = false;
-    private float dX, dY;
+    private boolean[] isMinimized = new boolean[3];
+    private float[] dX = new float[3];
+    private float[] dY = new float[3];
 
-    // F-Tool State & Handler
+    // F-Tool Status & Taktung
     private final Handler ftoolHandler = new Handler(Looper.getMainLooper());
-    private boolean isFtool1Running = false;
-    private boolean isFtool2Running = false;
-
-    private final int INTERVAL_CLIENT_1 = 1500;
-    private final int INTERVAL_CLIENT_2 = 2000;
-    private final String KEY_CLIENT_1 = "1";
-    private final String KEY_CLIENT_2 = "1";
+    private boolean[] isFtoolRunning = new boolean[4];
+    private final int[] INTERVALS = {1500, 2000, 2500, 3000};
+    private final String[] KEYS = {"1", "1", "1", "1"};
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
@@ -47,117 +42,112 @@ public class MainActivity extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.main);
 
-        webView1 = findViewById(R.id.webView1);
-        webView2 = findViewById(R.id.webView2);
-        overlayContainer = findViewById(R.id.overlayContainer);
-        dragHandle = findViewById(R.id.dragHandle);
-        btnToggle = findViewById(R.id.btnToggleSize);
-        btnFtoolMain = findViewById(R.id.btnFtoolMain);
-        btnFtoolOverlay = findViewById(R.id.btnFtoolOverlay);
+        // WebViews initialisieren
+        webViews[0] = findViewById(R.id.webView1);
+        webViews[1] = findViewById(R.id.webView2);
+        webViews[2] = findViewById(R.id.webView3);
+        webViews[3] = findViewById(R.id.webView4);
+
+        // Overlay Container (Clients 2, 3, 4)
+        containers[0] = findViewById(R.id.overlayContainer2);
+        containers[1] = findViewById(R.id.overlayContainer3);
+        containers[2] = findViewById(R.id.overlayContainer4);
+
+        dragHandles[0] = findViewById(R.id.dragHandle2);
+        dragHandles[1] = findViewById(R.id.dragHandle3);
+        dragHandles[2] = findViewById(R.id.dragHandle4);
+
+        toggleButtons[0] = findViewById(R.id.btnToggle2);
+        toggleButtons[1] = findViewById(R.id.btnToggle3);
+        toggleButtons[2] = findViewById(R.id.btnToggle4);
+
+        ftoolButtons[0] = findViewById(R.id.btnFtool1);
+        ftoolButtons[1] = findViewById(R.id.btnFtool2);
+        ftoolButtons[2] = findViewById(R.id.btnFtool3);
+        ftoolButtons[3] = findViewById(R.id.btnFtool4);
 
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(webView1, true);
-        cookieManager.setAcceptThirdPartyCookies(webView2, true);
 
-        configureWebView(webView1);
-        configureWebView(webView2);
+        for (int i = 0; i < 4; i++) {
+            cookieManager.setAcceptThirdPartyCookies(webViews[i], true);
+            configureWebView(webViews[i]);
+            webViews[i].loadUrl("https://universe.flyff.com/play");
 
-        webView1.loadUrl("https://universe.flyff.com/play");
-        webView2.loadUrl("https://universe.flyff.com/play");
+            final int clientIndex = i;
+            ftoolButtons[i].setOnClickListener(v -> toggleFtool(clientIndex));
+        }
 
-        // Drag & Drop über die separate Titelleiste (wird nicht von der WebView verschluckt)
-        dragHandle.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    dX = overlayContainer.getX() - event.getRawX();
-                    dY = overlayContainer.getY() - event.getRawY();
-                    v.getParent().requestDisallowInterceptTouchEvent(true);
-                    return true;
-                case MotionEvent.ACTION_MOVE:
-                    overlayContainer.animate()
-                            .x(event.getRawX() + dX)
-                            .y(event.getRawY() + dY)
-                            .setDuration(0)
-                            .start();
-                    return true;
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    v.getParent().requestDisallowInterceptTouchEvent(false);
-                    return true;
-                default:
-                    return false;
-            }
-        });
+        // Drag & Minimize für Overlays 2, 3 und 4 registrieren
+        for (int i = 0; i < 3; i++) {
+            final int idx = i;
+            final View container = containers[idx];
+            final View handle = dragHandles[idx];
+            final Button toggleBtn = toggleButtons[idx];
+            final WebView clientView = webViews[idx + 1];
 
-        // Minimieren / Wiederherstellen
-        btnToggle.setOnClickListener(v -> {
-            ViewGroup.LayoutParams params = overlayContainer.getLayoutParams();
-            float density = getResources().getDisplayMetrics().density;
-            if (isMinimized) {
-                params.width = (int) (320 * density);
-                params.height = (int) (220 * density);
-                webView2.setVisibility(View.VISIBLE);
-                btnToggle.setText("—");
-                isMinimized = false;
-            } else {
-                params.width = (int) (180 * density);
-                params.height = (int) (40 * density);
-                webView2.setVisibility(View.GONE);
-                btnToggle.setText("+");
-                isMinimized = true;
-            }
-            overlayContainer.setLayoutParams(params);
-        });
+            handle.setOnTouchListener((v, event) -> {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        dX[idx] = container.getX() - event.getRawX();
+                        dY[idx] = container.getY() - event.getRawY();
+                        v.getParent().requestDisallowInterceptTouchEvent(true);
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        container.animate()
+                                .x(event.getRawX() + dX[idx])
+                                .y(event.getRawY() + dY[idx])
+                                .setDuration(0)
+                                .start();
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        v.getParent().requestDisallowInterceptTouchEvent(false);
+                        return true;
+                    default:
+                        return false;
+                }
+            });
 
-        // F-Tool Button Account 1
-        btnFtoolMain.setOnClickListener(v -> {
-            isFtool1Running = !isFtool1Running;
-            if (isFtool1Running) {
-                btnFtoolMain.setText("FTool 1: ON (1)");
-                btnFtoolMain.setBackgroundColor(Color.parseColor("#8800AA00"));
-                ftoolHandler.post(ftool1Runnable);
-            } else {
-                btnFtoolMain.setText("FTool 1: OFF");
-                btnFtoolMain.setBackgroundColor(Color.parseColor("#88000000"));
-                ftoolHandler.removeCallbacks(ftool1Runnable);
-            }
-        });
-
-        // F-Tool Button Account 2
-        btnFtoolOverlay.setOnClickListener(v -> {
-            isFtool2Running = !isFtool2Running;
-            if (isFtool2Running) {
-                btnFtoolOverlay.setText("FT 2: ON");
-                btnFtoolOverlay.setBackgroundColor(Color.parseColor("#8800AA00"));
-                ftoolHandler.post(ftool2Runnable);
-            } else {
-                btnFtoolOverlay.setText("FT 2: OFF");
-                btnFtoolOverlay.setBackgroundColor(Color.parseColor("#555566"));
-                ftoolHandler.removeCallbacks(ftool2Runnable);
-            }
-        });
+            toggleBtn.setOnClickListener(v -> {
+                ViewGroup.LayoutParams params = container.getLayoutParams();
+                float density = getResources().getDisplayMetrics().density;
+                if (isMinimized[idx]) {
+                    params.width = (int) (280 * density);
+                    params.height = (int) (190 * density);
+                    clientView.setVisibility(View.VISIBLE);
+                    toggleBtn.setText("—");
+                    isMinimized[idx] = false;
+                } else {
+                    params.width = (int) (160 * density);
+                    params.height = (int) (36 * density);
+                    clientView.setVisibility(View.GONE);
+                    toggleBtn.setText("+");
+                    isMinimized[idx] = true;
+                }
+                container.setLayoutParams(params);
+            });
+        }
     }
 
-    private final Runnable ftool1Runnable = new Runnable() {
-        @Override
-        public void run() {
-            if (isFtool1Running && webView1 != null) {
-                pressGameKey(webView1, KEY_CLIENT_1);
-                ftoolHandler.postDelayed(this, INTERVAL_CLIENT_1);
-            }
+    private void toggleFtool(int index) {
+        isFtoolRunning[index] = !isFtoolRunning[index];
+        Button btn = ftoolButtons[index];
+        if (isFtoolRunning[index]) {
+            btn.setText("FT " + (index + 1) + ": ON");
+            btn.setBackgroundColor(Color.parseColor("#8800AA00"));
+            scheduleKey(index);
+        } else {
+            btn.setText("FT " + (index + 1) + ": OFF");
+            btn.setBackgroundColor(Color.parseColor("#555566"));
         }
-    };
+    }
 
-    private final Runnable ftool2Runnable = new Runnable() {
-        @Override
-        public void run() {
-            if (isFtool2Running && webView2 != null) {
-                pressGameKey(webView2, KEY_CLIENT_2);
-                ftoolHandler.postDelayed(this, INTERVAL_CLIENT_2);
-            }
-        }
-    };
+    private void scheduleKey(int index) {
+        if (!isFtoolRunning[index] || webViews[index] == null) return;
+        pressGameKey(webViews[index], KEYS[index]);
+        ftoolHandler.postDelayed(() -> scheduleKey(index), INTERVALS[index]);
+    }
 
     private void pressGameKey(WebView targetWebView, String key) {
         String js = "(function() {" +
@@ -212,22 +202,23 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        if (webView1 != null) webView1.onResume();
-        if (webView2 != null) webView2.onResume();
+        for (WebView w : webViews) {
+            if (w != null) w.onResume();
+        }
     }
 
     @Override
     protected void onPause() {
         super.onPause();
+        // Kein Pause-Aufruf, damit WebSocket-Verbindungen aktiv bleiben
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        isFtool1Running = false;
-        isFtool2Running = false;
         ftoolHandler.removeCallbacksAndMessages(null);
-        if (webView1 != null) webView1.destroy();
-        if (webView2 != null) webView2.destroy();
+        for (WebView w : webViews) {
+            if (w != null) w.destroy();
+        }
     }
 }
