@@ -2,10 +2,7 @@ package com.flyff.multiclient;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
-import android.graphics.Color;
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,26 +16,20 @@ import android.widget.Button;
 
 public class MainActivity extends Activity {
 
-    private WebView[] webViews = new WebView[4];
-    private View[] containers = new View[3];
-    private View[] dragHandles = new View[3];
-    private Button[] toggleButtons = new Button[3];
-    private Button[] ftoolButtons = new Button[4];
+    private final WebView[] webViews = new WebView[4];
+    private final View[] containers = new View[3];
+    private final View[] dragHandles = new View[3];
+    private final Button[] toggleButtons = new Button[3];
 
-    private boolean[] isMinimized = new boolean[3];
-    private float[] dX = new float[3];
-    private float[] dY = new float[3];
-
-    // F-Tool Status & Taktung
-    private final Handler ftoolHandler = new Handler(Looper.getMainLooper());
-    private boolean[] isFtoolRunning = new boolean[4];
-    private final int[] INTERVALS = {1500, 2000, 2500, 3000};
-    private final String[] KEYS = {"1", "1", "1", "1"};
+    private final boolean[] isMinimized = new boolean[3];
+    private final float[] dX = new float[3];
+    private final float[] dY = new float[3];
 
     @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Display bleibt dauerhaft an
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.main);
 
@@ -61,11 +52,7 @@ public class MainActivity extends Activity {
         toggleButtons[1] = findViewById(R.id.btnToggle3);
         toggleButtons[2] = findViewById(R.id.btnToggle4);
 
-        ftoolButtons[0] = findViewById(R.id.btnFtool1);
-        ftoolButtons[1] = findViewById(R.id.btnFtool2);
-        ftoolButtons[2] = findViewById(R.id.btnFtool3);
-        ftoolButtons[3] = findViewById(R.id.btnFtool4);
-
+        // Cookies verwalten
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
 
@@ -73,12 +60,9 @@ public class MainActivity extends Activity {
             cookieManager.setAcceptThirdPartyCookies(webViews[i], true);
             configureWebView(webViews[i]);
             webViews[i].loadUrl("https://universe.flyff.com/play");
-
-            final int clientIndex = i;
-            ftoolButtons[i].setOnClickListener(v -> toggleFtool(clientIndex));
         }
 
-        // Drag & Minimize für Overlays 2, 3 und 4 registrieren
+        // Drag & Drop sowie Minimieren für Overlays 2, 3 und 4 registrieren
         for (int i = 0; i < 3; i++) {
             final int idx = i;
             final View container = containers[idx];
@@ -119,7 +103,7 @@ public class MainActivity extends Activity {
                     toggleBtn.setText("—");
                     isMinimized[idx] = false;
                 } else {
-                    params.width = (int) (160 * density);
+                    params.width = (int) (120 * density);
                     params.height = (int) (36 * density);
                     clientView.setVisibility(View.GONE);
                     toggleBtn.setText("+");
@@ -128,53 +112,6 @@ public class MainActivity extends Activity {
                 container.setLayoutParams(params);
             });
         }
-    }
-
-    private void toggleFtool(int index) {
-        isFtoolRunning[index] = !isFtoolRunning[index];
-        Button btn = ftoolButtons[index];
-        if (isFtoolRunning[index]) {
-            btn.setText("FT " + (index + 1) + ": ON");
-            btn.setBackgroundColor(Color.parseColor("#8800AA00"));
-            scheduleKey(index);
-        } else {
-            btn.setText("FT " + (index + 1) + ": OFF");
-            btn.setBackgroundColor(Color.parseColor("#555566"));
-        }
-    }
-
-    private void scheduleKey(int index) {
-        if (!isFtoolRunning[index] || webViews[index] == null) return;
-        pressGameKey(webViews[index], KEYS[index]);
-        ftoolHandler.postDelayed(() -> scheduleKey(index), INTERVALS[index]);
-    }
-
-    private void pressGameKey(WebView targetWebView, String key) {
-        String js = "(function() {" +
-                "  var target = document.querySelector('canvas') || window;" +
-                "  var eventDown = new KeyboardEvent('keydown', {" +
-                "    key: '" + key + "'," +
-                "    code: 'Digit" + key + "'," +
-                "    which: " + (int) key.charAt(0) + "," +
-                "    keyCode: " + (int) key.charAt(0) + "," +
-                "    bubbles: true," +
-                "    cancelable: true" +
-                "  });" +
-                "  target.dispatchEvent(eventDown);" +
-                "  setTimeout(function() {" +
-                "    var eventUp = new KeyboardEvent('keyup', {" +
-                "      key: '" + key + "'," +
-                "      code: 'Digit" + key + "'," +
-                "      which: " + (int) key.charAt(0) + "," +
-                "      keyCode: " + (int) key.charAt(0) + "," +
-                "      bubbles: true," +
-                "      cancelable: true" +
-                "    });" +
-                "    target.dispatchEvent(eventUp);" +
-                "  }, 60);" +
-                "})();";
-
-        targetWebView.evaluateJavascript(js, null);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -210,13 +147,11 @@ public class MainActivity extends Activity {
     @Override
     protected void onPause() {
         super.onPause();
-        // Kein Pause-Aufruf, damit WebSocket-Verbindungen aktiv bleiben
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        ftoolHandler.removeCallbacksAndMessages(null);
         for (WebView w : webViews) {
             if (w != null) w.destroy();
         }
