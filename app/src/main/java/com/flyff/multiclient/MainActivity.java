@@ -12,7 +12,8 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 
 public class MainActivity extends Activity {
-    private WebView webView1, webView2;
+    private WebView webView1;
+    private WebView webView2;
     private View overlayContainer;
     private Button btnToggle;
     private boolean isMinimized = false;
@@ -79,7 +80,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture = false;
+        s.setMediaPlaybackRequiresUserGesture(false);
         w.setLayerType(View.LAYER_TYPE_HARDWARE, null);
         w.setWebViewClient(new WebViewClient() {
             @Override
