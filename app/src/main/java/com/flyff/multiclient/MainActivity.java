@@ -6,7 +6,6 @@ import android.app.AlertDialog;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -33,7 +32,7 @@ public class MainActivity extends Activity {
 
     // Kräftige Farben für C2 bis C8
     private final int[] CLIENT_COLORS = {
-            Color.parseColor("#00E676"), // C2: Grün
+            Color.parseColor("#00E676"), // C2: Leuchtendes Grün
             Color.parseColor("#00E5FF"), // C3: Cyan
             Color.parseColor("#FF007F"), // C4: Pink/Magenta
             Color.parseColor("#FFD600"), // C5: Gelb
@@ -63,7 +62,17 @@ public class MainActivity extends Activity {
     }
 
     private void promptSessionCount() {
-        final String[] options = {"1 Session (Vollbild)", "2 Sessions", "3 Sessions", "4 Sessions", "5 Sessions", "6 Sessions", "7 Sessions", "8 Sessions"};
+        final String[] options = {
+                "1 Session (Vollbild)",
+                "2 Sessions",
+                "3 Sessions",
+                "4 Sessions",
+                "5 Sessions",
+                "6 Sessions",
+                "7 Sessions",
+                "8 Sessions"
+        };
+
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
         builder.setTitle("Wie viele Sessions starten?")
                 .setCancelable(false)
@@ -81,7 +90,7 @@ public class MainActivity extends Activity {
     private void createOverlaySession(int clientNumber, int accentColor, int index) {
         float density = getResources().getDisplayMetrics().density;
 
-        // Haupt-Container des Overlays
+        // Basis-Container für das Overlay
         FrameLayout container = new FrameLayout(this);
         int defaultWidth = (int) (260 * density);
         int defaultHeight = (int) (180 * density);
@@ -97,13 +106,13 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        // Layout für Titelleiste + WebView
+        // Content-Layout (Titelleiste + WebView)
         LinearLayout contentLayout = new LinearLayout(this);
         contentLayout.setOrientation(LinearLayout.VERTICAL);
         contentLayout.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Titelleiste
+        // Schmale Titelleiste
         LinearLayout titleBar = new LinearLayout(this);
         titleBar.setLayoutParams(new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (32 * density)));
@@ -112,7 +121,7 @@ public class MainActivity extends Activity {
         titleBar.setBackgroundColor(Color.parseColor("#282830"));
         titleBar.setPadding((int) (6 * density), 0, (int) (4 * density), 0);
 
-        // Rundes Badge für Client-Nummer
+        // Rundes Farb-Badge für C2-C8
         TextView badge = new TextView(this);
         LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (22 * density), (int) (22 * density));
         badgeParams.setMarginEnd((int) (6 * density));
@@ -127,7 +136,7 @@ public class MainActivity extends Activity {
         badgeBg.setColor(accentColor);
         badge.setBackground(badgeBg);
 
-        // Zieh-Bereich / Titel
+        // Drag-Bereich / Titel
         TextView dragArea = new TextView(this);
         LinearLayout.LayoutParams dragParams = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         dragArea.setLayoutParams(dragParams);
@@ -149,7 +158,7 @@ public class MainActivity extends Activity {
         titleBar.addView(dragArea);
         titleBar.addView(minBtn);
 
-        // WebView des Overlays
+        // WebView für diesen Client
         WebView webView = new WebView(this);
         LinearLayout.LayoutParams webParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f);
@@ -173,7 +182,7 @@ public class MainActivity extends Activity {
         resizeHandle.setGravity(Gravity.CENTER);
         container.addView(resizeHandle);
 
-        // Runder Mini-Button (wird nur angezeigt, wenn minimiert)
+        // Runder Mini-Button bei Minimierung
         Button miniBubble = new Button(this);
         FrameLayout.LayoutParams bubbleParams = new FrameLayout.LayoutParams((int) (38 * density), (int) (38 * density));
         miniBubble.setLayoutParams(bubbleParams);
@@ -186,7 +195,7 @@ public class MainActivity extends Activity {
 
         overlayLayer.addView(container);
 
-        // 1. Drag & Drop Logik (über die Titelleiste)
+        // 1. Drag-Logik (Fenster verschieben)
         final float[] dX = {0};
         final float[] dY = {0};
         View.OnTouchListener dragListener = (v, event) -> {
@@ -204,13 +213,14 @@ public class MainActivity extends Activity {
                 case MotionEvent.ACTION_CANCEL:
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     return true;
+                default:
+                    return false;
             }
-            return false;
         };
         titleBar.setOnTouchListener(dragListener);
         dragArea.setOnTouchListener(dragListener);
 
-        // 2. Diagonales Resizen Logik (über das Resize-Icon)
+        // 2. Diagonales Resize (Größe ändern)
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
@@ -229,6 +239,116 @@ public class MainActivity extends Activity {
                     float deltaY = event.getRawY() - startY[0];
                     int newW = (int) Math.max(160 * density, startW[0] + deltaX);
                     int newH = (int) Math.max(120 * density, startH[0] + deltaY);
+
+                    ViewGroup.LayoutParams p = container.getLayoutParams();
+                    p.width = newW;
+                    p.height = newH;
+                    container.setLayoutParams(p);
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
+                    return true;
+                default:
+                    return false;
+            }
+        });
+
+        // 3. Minimieren & Wiederherstellen
+        final int[] savedWidth = {defaultWidth};
+        final int[] savedHeight = {defaultHeight};
+
+        minBtn.setOnClickListener(v -> {
+            savedWidth[0] = container.getWidth();
+            savedHeight[0] = container.getHeight();
+
+            contentLayout.setVisibility(View.GONE);
+            resizeHandle.setVisibility(View.GONE);
+            container.setBackground(null);
+            miniBubble.setVisibility(View.VISIBLE);
+
+            ViewGroup.LayoutParams p = container.getLayoutParams();
+            p.width = (int) (38 * density);
+            p.height = (int) (38 * density);
+            container.setLayoutParams(p);
+        });
+
+        miniBubble.setOnClickListener(v -> {
+            miniBubble.setVisibility(View.GONE);
+            contentLayout.setVisibility(View.VISIBLE);
+            resizeHandle.setVisibility(View.VISIBLE);
+            container.setBackground(bg);
+
+            ViewGroup.LayoutParams p = container.getLayoutParams();
+            p.width = savedWidth[0];
+            p.height = savedHeight[0];
+            container.setLayoutParams(p);
+        });
+
+        miniBubble.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    dX[0] = container.getX() - event.getRawX();
+                    dY[0] = container.getY() - event.getRawY();
+                    return false;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getRawX() + dX[0] - container.getX()) > 5 ||
+                            Math.abs(event.getRawY() + dY[0] - container.getY()) > 5) {
+                        container.setX(event.getRawX() + dX[0]);
+                        container.setY(event.getRawY() + dY[0]);
+                        return true;
+                    }
+                    return false;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private void configureWebView(WebView view) {
+        WebSettings s = view.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setDatabaseEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
+
+        view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+        view.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
+                return false;
+            }
+        });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        for (WebView w : activeWebViews) {
+            if (w != null) w.onResume();
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        for (WebView w : activeWebViews) {
+            if (w != null) w.destroy();
+        }
+    }
+}
+density, startH[0] + deltaY);
 
                     ViewGroup.LayoutParams p = container.getLayoutParams();
                     p.width = newW;
