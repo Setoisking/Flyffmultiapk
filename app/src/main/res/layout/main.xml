@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootContainer"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <WebView
+        android:id="@+id/webView1"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <FrameLayout
+        android:id="@+id/overlayContainer"
+        android:layout_width="320dp"
+        android:layout_height="220dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="12dp"
+        android:background="#1E1E1E">
+
+        <WebView
+            android:id="@+id/webView2"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <Button
+            android:id="@+id/btnToggleSize"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_gravity="top|end"
+            android:text="—"
+            android:textColor="#FFFFFF"
+            android:background="#88000000" />
+    </FrameLayout>
+</FrameLayout>
