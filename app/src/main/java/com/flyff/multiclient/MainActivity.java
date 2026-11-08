@@ -3,11 +3,8 @@ package com.flyff.multiclient;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
-import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -15,7 +12,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -54,9 +50,8 @@ public class MainActivity extends Activity {
     private final List<WebView> activeWebViews = new ArrayList<>();
     private final List<FrameLayout> overlayContainers = new ArrayList<>();
 
-    private int activeSwapIndex = -1;
+    private int activeSwapIndex = -1; // -1 = Normal, sonst Index des aktuell im Vollbild sitzenden Overlays
 
-    // GitHub Repo für Update-Checks
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
 
     private final int[] CLIENT_COLORS = {
@@ -92,9 +87,6 @@ public class MainActivity extends Activity {
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
-        addGridPresetButton();
-
-        // 1. Zuerst prüfen, ob ein GitHub-Release als Update vorliegt
         checkForUpdates();
     }
 
@@ -144,7 +136,6 @@ public class MainActivity extends Activity {
                     JSONObject releaseJson = new JSONObject(response.toString());
                     String latestTag = releaseJson.optString("tag_name", "").replace("v", "").trim();
 
-                    // APK Download Link suchen
                     String apkDownloadUrl = null;
                     JSONArray assets = releaseJson.optJSONArray("assets");
                     if (assets != null) {
@@ -172,7 +163,6 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {
             }
 
-            // Kein Update verfügbar oder Offline -> direkt Sessions wählen
             new Handler(Looper.getMainLooper()).post(this::promptSessionCount);
         }).start();
     }
@@ -208,7 +198,7 @@ public class MainActivity extends Activity {
     private void showUpdateDialog(String currentVer, String newVer, String downloadUrl) {
         new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
                 .setTitle("Neues Update verfügbar!")
-                .setMessage("Aktuell: v" + currentVer + "\nNeu: v" + newVer + "\n\nMöchtest du die neueste Version herunterladen und installieren?")
+                .setMessage("Aktuell: v" + currentVer + "\nNeu: v" + newVer + "\n\nMöchtest du die neueste Version herunterladen?")
                 .setCancelable(false)
                 .setPositiveButton("Aktualisieren", (dialog, which) -> downloadAndInstallApk(downloadUrl))
                 .setNegativeButton("Später", (dialog, which) -> promptSessionCount())
@@ -243,7 +233,6 @@ public class MainActivity extends Activity {
                 new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
             } catch (Exception e) {
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Download fehlgeschlagen. Starte Browser...", Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
                     promptSessionCount();
@@ -260,30 +249,13 @@ public class MainActivity extends Activity {
             installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(installIntent);
         } catch (Exception e) {
-            Toast.makeText(this, "Fehler beim Starten des Installers.", Toast.LENGTH_SHORT).show();
             promptSessionCount();
         }
     }
 
     // ==========================================
-    // MULTI-SESSION LAYOUT & HANDLING
+    // MULTI-SESSION HANDLING
     // ==========================================
-    private void addGridPresetButton() {
-        float density = getResources().getDisplayMetrics().density;
-        Button gridBtn = new Button(this);
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams((int) (64 * density), (int) (28 * density));
-        params.gravity = Gravity.TOP | Gravity.START;
-        params.leftMargin = (int) (8 * density);
-        params.topMargin = (int) (8 * density);
-        gridBtn.setLayoutParams(params);
-        gridBtn.setText("⊞ Grid");
-        gridBtn.setTextColor(Color.WHITE);
-        gridBtn.setTextSize(10);
-        gridBtn.setBackgroundColor(Color.parseColor("#66000000"));
-        gridBtn.setOnClickListener(v -> applyGridLayout());
-        rootContainer.addView(gridBtn);
-    }
-
     private void promptSessionCount() {
         final String[] options = {
                 "1 Session (Vollbild)", "2 Sessions", "3 Sessions", "4 Sessions",
@@ -389,11 +361,14 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
+                    // Klick: Minimieren / Wiederherstellen
                     if (duration < 250) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
-                            webView.setVisibility(View.GONE);
+                            // Webview im Container verstecken
+                            View clientView = container.getChildAt(0);
+                            if (clientView != null) clientView.setVisibility(View.GONE);
                             resizeHandle.setVisibility(View.GONE);
                             container.setBackground(null);
 
@@ -402,9 +377,9 @@ public class MainActivity extends Activity {
                             p.height = (int) (36 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
-                            setClientLowSpecMode(webView, true);
                         } else {
-                            webView.setVisibility(View.VISIBLE);
+                            View clientView = container.getChildAt(0);
+                            if (clientView != null) clientView.setVisibility(View.VISIBLE);
                             resizeHandle.setVisibility(View.VISIBLE);
                             container.setBackground(bg);
 
@@ -413,13 +388,13 @@ public class MainActivity extends Activity {
                             p.height = savedHeight[0];
                             container.setLayoutParams(p);
                             isMinimized[0] = false;
-                            setClientLowSpecMode(webView, false);
                         }
                         return true;
                     }
 
-                    if (duration >= 700) {
-                        toggleSwapClient(overlayIndex);
+                    // Langer Druck: Vollbild swap ohne Neuladen
+                    if (duration >= 600) {
+                        swapViewsWithoutReload(overlayIndex);
                         return true;
                     }
                     return true;
@@ -431,6 +406,7 @@ public class MainActivity extends Activity {
             return false;
         });
 
+        // Resize-Logik
         final float[] startX = {0};
         final float[] startY = {0};
         final int[] startW = {0};
@@ -467,68 +443,42 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void toggleSwapClient(int overlayIndex) {
-        WebView mainView = activeWebViews.get(0);
-        WebView targetView = activeWebViews.get(overlayIndex + 1);
+    // ==========================================
+    // ECHTER VIEW-TAUSCH OHNE NEULADEN
+    // ==========================================
+    private void swapViewsWithoutReload(int targetOverlayIndex) {
+        FrameLayout targetContainer = overlayContainers.get(targetOverlayIndex);
 
-        String urlMain = mainView.getUrl();
-        String urlTarget = targetView.getUrl();
+        // Die beiden WebViews
+        WebView viewA = (WebView) rootContainer.getChildAt(0); // Liegt aktuell im Vollbild
+        WebView viewB = (WebView) targetContainer.getChildAt(0); // Liegt im Ziel-Overlay
 
-        if (activeSwapIndex == overlayIndex) {
-            Toast.makeText(this, "Zurück zum Hauptfenster", Toast.LENGTH_SHORT).show();
+        if (viewA == null || viewB == null) return;
+
+        // Aus ihren Eltern-Containern lösen
+        rootContainer.removeView(viewA);
+        targetContainer.removeView(viewB);
+
+        // Layout-Parameter anpassen
+        viewB.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        viewA.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        // An Index 0 wieder einhängen (unter den Buttons/Handles)
+        rootContainer.addView(viewB, 0);
+        targetContainer.addView(viewA, 0);
+
+        // Audio-Sync: Das Vollbild-Fenster erhält Ton, das Overlay wird stummgeschaltet
+        setClientAudioMuted(viewB, false);
+        setClientAudioMuted(viewA, true);
+
+        if (activeSwapIndex == targetOverlayIndex) {
             activeSwapIndex = -1;
+            Toast.makeText(this, "Zurückgetauscht", Toast.LENGTH_SHORT).show();
         } else {
-            Toast.makeText(this, "Session mit Vollbild getauscht!", Toast.LENGTH_SHORT).show();
-            activeSwapIndex = overlayIndex;
-        }
-
-        mainView.loadUrl(urlTarget != null ? urlTarget : "https://universe.flyff.com/play");
-        targetView.loadUrl(urlMain != null ? urlMain : "https://universe.flyff.com/play");
-    }
-
-    private void applyGridLayout() {
-        int count = overlayContainers.size();
-        if (count == 0) return;
-
-        DisplayMetrics dm = getResources().getDisplayMetrics();
-        int screenW = dm.widthPixels;
-        int screenH = dm.heightPixels;
-
-        int cols = count >= 3 ? 2 : 1;
-        int rows = (int) Math.ceil((double) count / cols);
-        int tileW = screenW / cols;
-        int tileH = screenH / rows;
-
-        for (int i = 0; i < count; i++) {
-            FrameLayout c = overlayContainers.get(i);
-            int col = i % cols;
-            int row = i / cols;
-
-            ViewGroup.LayoutParams p = c.getLayoutParams();
-            p.width = tileW - 8;
-            p.height = tileH - 8;
-            c.setLayoutParams(p);
-            c.setX(col * tileW + 4);
-            c.setY(row * tileH + 4);
-        }
-        Toast.makeText(this, "Grid angewendet!", Toast.LENGTH_SHORT).show();
-    }
-
-    private void setClientLowSpecMode(WebView wv, boolean enableLowSpec) {
-        if (wv == null) return;
-        if (enableLowSpec) {
-            String js = "(function() {" +
-                    "  window.__origRAF = window.__origRAF || window.requestAnimationFrame;" +
-                    "  window.requestAnimationFrame = function(cb) {" +
-                    "    return setTimeout(function() { cb(performance.now()); }, 100);" +
-                    "  };" +
-                    "})();";
-            wv.evaluateJavascript(js, null);
-        } else {
-            String js = "(function() {" +
-                    "  if (window.__origRAF) { window.requestAnimationFrame = window.__origRAF; }" +
-                    "})();";
-            wv.evaluateJavascript(js, null);
+            activeSwapIndex = targetOverlayIndex;
+            Toast.makeText(this, "Ansicht gewechselt (ohne Reload)", Toast.LENGTH_SHORT).show();
         }
     }
 
