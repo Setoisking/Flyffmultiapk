@@ -1,7 +1,10 @@
 name: Build and Release APK
 
 on:
+  push:
+    branches: [ main ]
   workflow_dispatch:
+
 
 permissions:
   contents: write
