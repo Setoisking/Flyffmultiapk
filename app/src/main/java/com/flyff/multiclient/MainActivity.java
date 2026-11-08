@@ -22,6 +22,7 @@ public class MainActivity extends Activity {
     private WebView webView1;
     private WebView webView2;
     private View overlayContainer;
+    private View dragHandle;
     private Button btnToggle;
     private Button btnFtoolMain;
     private Button btnFtoolOverlay;
@@ -34,11 +35,8 @@ public class MainActivity extends Activity {
     private boolean isFtool1Running = false;
     private boolean isFtool2Running = false;
 
-    // Intervalle in Millisekunden (1500 ms = alle 1,5s / 2000 ms = alle 2s)
     private final int INTERVAL_CLIENT_1 = 1500;
     private final int INTERVAL_CLIENT_2 = 2000;
-
-    // Standard-Taste (Slot 1 der Quick-Slot-Leiste)
     private final String KEY_CLIENT_1 = "1";
     private final String KEY_CLIENT_2 = "1";
 
@@ -52,6 +50,7 @@ public class MainActivity extends Activity {
         webView1 = findViewById(R.id.webView1);
         webView2 = findViewById(R.id.webView2);
         overlayContainer = findViewById(R.id.overlayContainer);
+        dragHandle = findViewById(R.id.dragHandle);
         btnToggle = findViewById(R.id.btnToggleSize);
         btnFtoolMain = findViewById(R.id.btnFtoolMain);
         btnFtoolOverlay = findViewById(R.id.btnFtoolOverlay);
@@ -67,15 +66,24 @@ public class MainActivity extends Activity {
         webView1.loadUrl("https://universe.flyff.com/play");
         webView2.loadUrl("https://universe.flyff.com/play");
 
-        // Drag & Drop für das Overlay
-        overlayContainer.setOnTouchListener((v, event) -> {
+        // Drag & Drop über die separate Titelleiste (wird nicht von der WebView verschluckt)
+        dragHandle.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    dX = v.getX() - event.getRawX();
-                    dY = v.getY() - event.getRawY();
-                    return false;
+                    dX = overlayContainer.getX() - event.getRawX();
+                    dY = overlayContainer.getY() - event.getRawY();
+                    v.getParent().requestDisallowInterceptTouchEvent(true);
+                    return true;
                 case MotionEvent.ACTION_MOVE:
-                    v.animate().x(event.getRawX() + dX).y(event.getRawY() + dY).setDuration(0).start();
+                    overlayContainer.animate()
+                            .x(event.getRawX() + dX)
+                            .y(event.getRawY() + dY)
+                            .setDuration(0)
+                            .start();
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    v.getParent().requestDisallowInterceptTouchEvent(false);
                     return true;
                 default:
                     return false;
@@ -93,9 +101,9 @@ public class MainActivity extends Activity {
                 btnToggle.setText("—");
                 isMinimized = false;
             } else {
-                params.width = (int) (140 * density);
-                params.height = (int) (48 * density);
-                webView2.setVisibility(View.INVISIBLE);
+                params.width = (int) (180 * density);
+                params.height = (int) (40 * density);
+                webView2.setVisibility(View.GONE);
                 btnToggle.setText("+");
                 isMinimized = true;
             }
@@ -116,7 +124,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // F-Tool Button Account 2 (funktioniert auch minimiert)
+        // F-Tool Button Account 2
         btnFtoolOverlay.setOnClickListener(v -> {
             isFtool2Running = !isFtool2Running;
             if (isFtool2Running) {
@@ -125,7 +133,7 @@ public class MainActivity extends Activity {
                 ftoolHandler.post(ftool2Runnable);
             } else {
                 btnFtoolOverlay.setText("FT 2: OFF");
-                btnFtoolOverlay.setBackgroundColor(Color.parseColor("#88000000"));
+                btnFtoolOverlay.setBackgroundColor(Color.parseColor("#555566"));
                 ftoolHandler.removeCallbacks(ftool2Runnable);
             }
         });
