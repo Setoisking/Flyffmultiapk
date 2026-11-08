@@ -1,10 +1,13 @@
 package com.flyff.multiclient;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowManager;
+import android.webkit.CookieManager;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -12,6 +15,7 @@ import android.webkit.WebViewClient;
 import android.widget.Button;
 
 public class MainActivity extends Activity {
+
     private WebView webView1;
     private WebView webView2;
     private View overlayContainer;
@@ -19,22 +23,34 @@ public class MainActivity extends Activity {
     private boolean isMinimized = false;
     private float dX, dY;
 
+    @SuppressLint("ClickableViewAccessibility")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // Display bleibt dauerhaft an (kein Blackscreen beim Grinden/Buffen)
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
         setContentView(R.layout.main);
 
-        webView1 = (WebView) findViewById(R.id.webView1);
-        webView2 = (WebView) findViewById(R.id.webView2);
+        webView1 = findViewById(R.id.webView1);
+        webView2 = findViewById(R.id.webView2);
         overlayContainer = findViewById(R.id.overlayContainer);
-        btnToggle = (Button) findViewById(R.id.btnToggleSize);
+        btnToggle = findViewById(R.id.btnToggleSize);
 
-        setup(webView1);
-        setup(webView2);
+        // Cookie-Trennung aktivieren
+        CookieManager cookieManager = CookieManager.getInstance();
+        cookieManager.setAcceptCookie(true);
+        cookieManager.setAcceptThirdPartyCookies(webView1, true);
+        cookieManager.setAcceptThirdPartyCookies(webView2, true);
+
+        configureWebView(webView1);
+        configureWebView(webView2);
 
         webView1.loadUrl("https://universe.flyff.com/play");
         webView2.loadUrl("https://universe.flyff.com/play");
 
+        // Overlay verschieben (Drag & Drop)
         overlayContainer.setOnTouchListener(new View.OnTouchListener() {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
@@ -44,7 +60,11 @@ public class MainActivity extends Activity {
                         dY = v.getY() - event.getRawY();
                         return false;
                     case MotionEvent.ACTION_MOVE:
-                        v.animate().x(event.getRawX() + dX).y(event.getRawY() + dY).setDuration(0).start();
+                        v.animate()
+                                .x(event.getRawX() + dX)
+                                .y(event.getRawY() + dY)
+                                .setDuration(0)
+                                .start();
                         return true;
                     default:
                         return false;
@@ -52,6 +72,7 @@ public class MainActivity extends Activity {
             }
         });
 
+        // Overlay minimieren / maximieren
         btnToggle.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -75,19 +96,48 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void setup(WebView w) {
-        WebSettings s = w.getSettings();
+    @SuppressLint("SetJavaScriptEnabled")
+    private void configureWebView(WebView view) {
+        WebSettings s = view.getSettings();
+
+        // Maximale WebGL- und Skript-Performance
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
         s.setMediaPlaybackRequiresUserGesture(false);
-        w.setLayerType(View.LAYER_TYPE_HARDWARE, null);
-        w.setWebViewClient(new WebViewClient() {
+
+        // Caching aktivieren
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
+
+        // Skalierung für mobile Steuerung
+        s.setUseWideViewPort(true);
+        s.setLoadWithOverviewMode(true);
+        s.setBuiltInZoomControls(false);
+        s.setDisplayZoomControls(false);
+
+        // Hardware-Beschleunigung erzwingen
+        view.setLayerType(View.LAYER_TYPE_HARDWARE, null);
+
+        view.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+            public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 return false;
             }
         });
+    }
+
+    // Verhindert das Pausieren des Zweit-Clients bei Fensterinteraktionen
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView1 != null) webView1.onResume();
+        if (webView2 != null) webView2.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        // Kein webView.onPause(), damit WebSocket-Verbindungen aktiv bleiben
     }
 
     @Override
