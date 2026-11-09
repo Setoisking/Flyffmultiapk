@@ -14,6 +14,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
@@ -64,6 +65,8 @@ public class MainActivity extends Activity {
     public static final int ROLE_LEECH = 2;
     private int[] sessionRoles = new int[8];
     private int totalSavedSessions = 1;
+
+    private final Handler loopHandler = new Handler(Looper.getMainLooper());
 
     private final int[] CLIENT_COLORS = {
             Color.parseColor("#00E676"), // C2: Grün
@@ -141,8 +144,8 @@ public class MainActivity extends Activity {
             FrameLayout container = overlayContainers.get(i);
             if (container != null) {
                 if (isExpandedFoldable) {
-                    int overlayW = (int) (260 * density);
-                    int overlayH = (int) (170 * density);
+                    int overlayW = (int) (270 * density);
+                    int overlayH = (int) (175 * density);
                     ViewGroup.LayoutParams p = container.getLayoutParams();
                     p.width = overlayW;
                     p.height = overlayH;
@@ -210,8 +213,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                 }
-            } catch (Exception ignored) {
-            }
+            } catch (Exception ignored) {}
 
             new Handler(Looper.getMainLooper()).post(this::checkSavedSessionSetup);
         }).start();
@@ -436,7 +438,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // MULTI-SESSION OVERLAYS & KOORDINATEN-LERNER
+    // MULTI-SESSION OVERLAYS & ADVANCED LOGIK
     // ==========================================
     @SuppressLint("ClickableViewAccessibility")
     private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
@@ -459,7 +461,6 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        // WebView
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -471,7 +472,7 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // Quick-Action Dock (Oben)
+        // Obere Schnellleiste
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
@@ -483,15 +484,10 @@ public class MainActivity extends Activity {
         topDock.setPadding((int) (4 * density), 0, (int) (4 * density), 0);
 
         final String badgeText;
-        if (role == ROLE_HEAL) {
-            badgeText = "RM";
-        } else if (role == ROLE_LEECH) {
-            badgeText = "LC";
-        } else if (role == ROLE_DD) {
-            badgeText = "DD";
-        } else {
-            badgeText = "C" + clientNumber;
-        }
+        if (role == ROLE_HEAL) badgeText = "RM";
+        else if (role == ROLE_LEECH) badgeText = "LC";
+        else if (role == ROLE_DD) badgeText = "DD";
+        else badgeText = "C" + clientNumber;
 
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
@@ -507,13 +503,24 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
+        // Punkt 4: Mini-Dock Buttons (bleiben bei Minimierung sichtbar)
+        TextView miniBtnHeal = createDockButton("H", accentColor, density);
+        miniBtnHeal.setVisibility(View.GONE);
+        miniBtnHeal.setOnClickListener(v -> executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49));
+        topDock.addView(miniBtnHeal);
+
+        TextView miniBtnBuff = createDockButton("B", accentColor, density);
+        miniBtnBuff.setVisibility(View.GONE);
+        miniBtnBuff.setOnClickListener(v -> executeRecordedBuffSequence(webView, clientUid));
+        topDock.addView(miniBtnBuff);
+
         final boolean[] isRecordingMode = {false};
         final String[] targetKeyToRecord = {""};
 
         TextView btnHeal = null;
         TextView btnBuff = null;
-        TextView btnFollow = null;
         TextView btnBuffFast = null;
+        TextView btnFollow = null;
 
         if (role == ROLE_HEAL) {
             btnHeal = createDockButton("Heal", accentColor, density);
@@ -565,6 +572,32 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnFollow);
 
+            // Punkt 2: Smart-Follow Toggle (wiederholt alle 15 Sekunden Follow)
+            final boolean[] isAutoFollowActive = {false};
+            TextView btnAutoFollow = createDockButton("AFol", accentColor, density);
+            Runnable autoFollowTask = new Runnable() {
+                @Override
+                public void run() {
+                    if (isAutoFollowActive[0]) {
+                        executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit3", 51);
+                        loopHandler.postDelayed(this, 15000);
+                    }
+                }
+            };
+            btnAutoFollow.setOnClickListener(v -> {
+                isAutoFollowActive[0] = !isAutoFollowActive[0];
+                if (isAutoFollowActive[0]) {
+                    btnAutoFollow.setTextColor(Color.GREEN);
+                    Toast.makeText(this, "Auto-Follow alle 15s aktiv", Toast.LENGTH_SHORT).show();
+                    loopHandler.post(autoFollowTask);
+                } else {
+                    btnAutoFollow.setTextColor(Color.WHITE);
+                    loopHandler.removeCallbacks(autoFollowTask);
+                    Toast.makeText(this, "Auto-Follow gestoppt", Toast.LENGTH_SHORT).show();
+                }
+            });
+            topDock.addView(btnAutoFollow);
+
         } else if (role == ROLE_LEECH) {
             btnFollow = createDockButton("Fol", accentColor, density);
             final TextView finalBtnFol2 = btnFollow;
@@ -591,6 +624,11 @@ public class MainActivity extends Activity {
             btnSkill.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
             topDock.addView(btnSkill);
         }
+
+        // Punkt 6: Auto-Login Button
+        TextView btnAutoLogin = createDockButton("Key", accentColor, density);
+        btnAutoLogin.setOnClickListener(v -> promptAccountCredentialsDialog(clientUid, webView));
+        topDock.addView(btnAutoLogin);
 
         TextView btnSettings = createDockButton("⚙", accentColor, density);
         btnSettings.setOnClickListener(v -> {
@@ -641,7 +679,9 @@ public class MainActivity extends Activity {
 
         container.addView(topDock);
 
-        // Touch-Listener zum Aufzeichnen von Klicks
+        // Punkt 3: HP-Alarm & Notfall-Auto-Heal Watcher Loop
+        startHpWatcherLoop(webView, clientUid, floatingBadge, accentColor);
+
         webView.setOnTouchListener((v, event) -> {
             if (isRecordingMode[0] && !targetKeyToRecord[0].isEmpty() && event.getAction() == MotionEvent.ACTION_UP) {
                 float clickX = event.getX();
@@ -719,7 +759,7 @@ public class MainActivity extends Activity {
                         }
                     }
 
-                    // Minimieren mit INVISIBLE statt GONE (damit Klicks im Hintergrund aktiv bleiben)
+                    // Klick auf Badge: Minimieren / Wiederherstellen mit Floating Mini-Dock
                     if (duration < 250 && event.getX() < 40 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
@@ -727,13 +767,18 @@ public class MainActivity extends Activity {
 
                             webView.setVisibility(View.INVISIBLE);
                             resizeHandle.setVisibility(View.GONE);
-                            for (int i = 1; i < topDock.getChildCount(); i++) {
+
+                            // Große Buttons ausblenden
+                            for (int i = 3; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.GONE);
                             }
+                            // Mini-Buttons H und B einblenden
+                            miniBtnHeal.setVisibility(View.VISIBLE);
+                            miniBtnBuff.setVisibility(View.VISIBLE);
                             container.setBackground(null);
 
                             ViewGroup.LayoutParams p = container.getLayoutParams();
-                            p.width = (int) (32 * density);
+                            p.width = (int) (105 * density);
                             p.height = (int) (32 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
@@ -741,7 +786,11 @@ public class MainActivity extends Activity {
                         } else {
                             webView.setVisibility(View.VISIBLE);
                             resizeHandle.setVisibility(View.VISIBLE);
-                            for (int i = 1; i < topDock.getChildCount(); i++) {
+
+                            miniBtnHeal.setVisibility(View.GONE);
+                            miniBtnBuff.setVisibility(View.GONE);
+
+                            for (int i = 3; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.VISIBLE);
                             }
                             container.setBackground(bg);
@@ -803,6 +852,99 @@ public class MainActivity extends Activity {
             }
             return false;
         });
+    }
+
+    // ==========================================
+    // AUTO-LOGIN DIALOG & INJEKTION (PUNKT 6)
+    // ==========================================
+    private void promptAccountCredentialsDialog(int clientUid, WebView webView) {
+        String savedUser = prefs.getString("c" + clientUid + "_login_user", "");
+        String savedPass = prefs.getString("c" + clientUid + "_login_pass", "");
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 20, 40, 10);
+
+        final EditText userInput = new EditText(this);
+        userInput.setHint("E-Mail / Benutzername");
+        userInput.setText(savedUser);
+        layout.addView(userInput);
+
+        final EditText passInput = new EditText(this);
+        passInput.setHint("Passwort");
+        passInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        passInput.setText(savedPass);
+        layout.addView(passInput);
+
+        new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Quick-Login Client " + clientUid)
+                .setView(layout)
+                .setPositiveButton("Auto-Login", (dialog, which) -> {
+                    String u = userInput.getText().toString().trim();
+                    String p = passInput.getText().toString().trim();
+                    prefs.edit().putString("c" + clientUid + "_login_user", u)
+                            .putString("c" + clientUid + "_login_pass", p).apply();
+                    injectCredentials(webView, u, p);
+                })
+                .setNeutralButton("Speichern", (dialog, which) -> {
+                    prefs.edit().putString("c" + clientUid + "_login_user", userInput.getText().toString().trim())
+                            .putString("c" + clientUid + "_login_pass", passInput.getText().toString().trim()).apply();
+                    Toast.makeText(this, "Login gespeichert", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Abbrechen", null)
+                .show();
+    }
+
+    private void injectCredentials(WebView wv, String user, String pass) {
+        if (wv == null) return;
+        String js = "(function() {" +
+                "  var inputs = document.querySelectorAll('input');" +
+                "  for(var i=0; i<inputs.length; i++) {" +
+                "    var type = inputs[i].getAttribute('type') || '';" +
+                "    if(type.toLowerCase() === 'password') {" +
+                "      inputs[i].value = '" + pass + "';" +
+                "      inputs[i].dispatchEvent(new Event('input', {bubbles: true}));" +
+                "    } else if(type.toLowerCase() === 'email' || type.toLowerCase() === 'text') {" +
+                "      inputs[i].value = '" + user + "';" +
+                "      inputs[i].dispatchEvent(new Event('input', {bubbles: true}));" +
+                "    }" +
+                "  }" +
+                "})();";
+        wv.evaluateJavascript(js, null);
+        Toast.makeText(this, "Login-Daten ausgefüllt", Toast.LENGTH_SHORT).show();
+    }
+
+    // ==========================================
+    // HP-ALARM & NOTFALL AUTO-HEAL (PUNKT 3)
+    // ==========================================
+    private void startHpWatcherLoop(WebView wv, int clientUid, TextView badgeView, int defaultColor) {
+        Runnable r = new Runnable() {
+            @Override
+            public void run() {
+                if (wv != null) {
+                    // Überprüft das Flyff Universe DOM auf niedrige HP (Low-HP Warnung)
+                    String checkJs = "(function() {" +
+                            "  var hpBar = document.querySelector('.player-hp, .progress-bar-danger, [class*=\"hp\"]');" +
+                            "  if (hpBar && hpBar.style && hpBar.style.width) {" +
+                            "    var val = parseInt(hpBar.style.width);" +
+                            "    return (val > 0 && val < 30) ? 'LOW' : 'OK';" +
+                            "  }" +
+                            "  return 'OK';" +
+                            "})();";
+
+                    wv.evaluateJavascript(checkJs, val -> {
+                        if (val != null && val.contains("LOW")) {
+                            badgeView.setBackgroundColor(Color.RED);
+                            executeRecordedTap(wv, "c" + clientUid + "_heal", "Digit1", 49);
+                        } else {
+                            badgeView.setBackgroundColor(defaultColor);
+                        }
+                    });
+                }
+                loopHandler.postDelayed(this, 3000); // alle 3 Sekunden prüfen
+            }
+        };
+        loopHandler.postDelayed(r, 4000);
     }
 
     // ==========================================
@@ -880,7 +1022,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // Löst Klicks direkt im HTML5-Canvas aus (auch wenn die View minimiert / invisible ist)
     private void dispatchRelativeTouch(WebView wv, float relX, float relY) {
         if (wv == null) return;
         String js = "(function() {" +
@@ -1046,6 +1187,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        loopHandler.removeCallbacksAndMessages(null);
         for (WebView w : activeWebViews) {
             if (w != null) w.destroy();
         }
