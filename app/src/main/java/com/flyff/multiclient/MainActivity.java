@@ -227,34 +227,76 @@ public class MainActivity extends Activity {
     }
 
     private void downloadAndInstallApk(String fileUrl) {
-        Toast.makeText(this, "Lade Update herunter...", Toast.LENGTH_SHORT).show();
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                Toast.makeText(this, "Bitte 'Unbekannte Apps installieren' erlauben und erneut tippen", Toast.LENGTH_LONG).show();
+                Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
+                settingsIntent.setData(Uri.parse("package:" + getPackageName()));
+                startActivity(settingsIntent);
+                return;
+            }
+        }
+
+        Toast.makeText(this, "Lade Update herunter... Bitte kurz warten", Toast.LENGTH_SHORT).show();
+
         new Thread(() -> {
             try {
-                URL url = new URL(fileUrl);
-                HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                conn.setRequestProperty("Accept-Encoding", "identity");
-                conn.connect();
+                String targetUrl = fileUrl;
+                HttpURLConnection conn;
+                int responseCode;
+                int redirectCount = 0;
+
+                // Weiterleitungen von GitHub (302 -> AWS S3) auflösen
+                while (redirectCount < 5) {
+                    URL u = new URL(targetUrl);
+                    conn = (HttpURLConnection) u.openConnection();
+                    conn.setInstanceFollowRedirects(false);
+                    conn.setConnectTimeout(10000);
+                    conn.setReadTimeout(10000);
+                    responseCode = conn.getResponseCode();
+
+                    if (responseCode == HttpURLConnection.HTTP_MOVED_PERM
+                            || responseCode == HttpURLConnection.HTTP_MOVED_TEMP
+                            || responseCode == 307
+                            || responseCode == 308) {
+                        targetUrl = conn.getHeaderField("Location");
+                        redirectCount++;
+                    } else {
+                        break;
+                    }
+                }
+
+                URL finalUrl = new URL(targetUrl);
+                HttpURLConnection finalConn = (HttpURLConnection) finalUrl.openConnection();
+                finalConn.connect();
 
                 File cachePath = new File(getExternalCacheDir(), "updates");
                 if (!cachePath.exists()) cachePath.mkdirs();
                 File outputFile = new File(cachePath, "update.apk");
 
-                InputStream in = conn.getInputStream();
+                InputStream in = finalConn.getInputStream();
                 FileOutputStream out = new FileOutputStream(outputFile);
 
-                byte[] buffer = new byte[4096];
+                byte[] buffer = new byte[8192];
                 int bytesRead;
+                long totalBytes = 0;
                 while ((bytesRead = in.read(buffer)) != -1) {
                     out.write(buffer, 0, bytesRead);
+                    totalBytes += bytesRead;
                 }
                 out.flush();
                 out.close();
                 in.close();
 
-                new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
+                if (totalBytes > 100000) {
+                    new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
+                } else {
+                    throw new Exception("Heruntergeladene Datei ist unvollständig.");
+                }
+
             } catch (Exception e) {
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Öffne Browser für Download...", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Download fehlgeschlagen, öffne Browser...", Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
                     promptSessionCount();
@@ -265,23 +307,13 @@ public class MainActivity extends Activity {
 
     private void installApk(File apkFile) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                if (!getPackageManager().canRequestPackageInstalls()) {
-                    Toast.makeText(this, "Bitte 'Unbekannte Apps installieren' erlauben", Toast.LENGTH_LONG).show();
-                    Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
-                    settingsIntent.setData(Uri.parse("package:" + getPackageName()));
-                    startActivity(settingsIntent);
-                    return;
-                }
-            }
-
             Uri contentUri = FileProvider.getUriForFile(this, getPackageName() + ".provider", apkFile);
             Intent installIntent = new Intent(Intent.ACTION_VIEW);
             installIntent.setDataAndType(contentUri, "application/vnd.android.package-archive");
             installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(installIntent);
         } catch (Exception e) {
-            Toast.makeText(this, "Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Installer-Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             promptSessionCount();
         }
     }
