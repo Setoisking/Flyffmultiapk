@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -26,6 +27,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -55,12 +57,13 @@ public class MainActivity extends Activity {
 
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
+    private SharedPreferences prefs;
 
-    // Client Rollen: 0 = DD (Main), 1 = Heal (RM), 2 = Leech
     public static final int ROLE_DD = 0;
     public static final int ROLE_HEAL = 1;
     public static final int ROLE_LEECH = 2;
     private int[] sessionRoles = new int[8];
+    private int totalSavedSessions = 1;
 
     private final int[] CLIENT_COLORS = {
             Color.parseColor("#00E676"), // C2: Grün
@@ -76,6 +79,12 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                WebView.setDataDirectorySuffix("main_client");
+            } catch (Exception ignored) {}
+        }
+
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -83,6 +92,7 @@ public class MainActivity extends Activity {
         setContentView(R.layout.main);
         hideSystemUI();
 
+        prefs = getSharedPreferences("FlyffMultiClient_Prefs", MODE_PRIVATE);
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
 
@@ -203,7 +213,7 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {
             }
 
-            new Handler(Looper.getMainLooper()).post(this::promptSessionCount);
+            new Handler(Looper.getMainLooper()).post(this::checkSavedSessionSetup);
         }).start();
     }
 
@@ -241,7 +251,7 @@ public class MainActivity extends Activity {
                 .setMessage("Installiert: v" + currentVer + "\nNeueste Version: v" + newVer + "\n\nJetzt aktualisieren?")
                 .setCancelable(false)
                 .setPositiveButton("Aktualisieren", (dialog, which) -> downloadAndInstallApk(downloadUrl))
-                .setNegativeButton("Später", (dialog, which) -> promptSessionCount())
+                .setNegativeButton("Später", (dialog, which) -> checkSavedSessionSetup())
                 .show();
     }
 
@@ -317,7 +327,7 @@ public class MainActivity extends Activity {
                     Toast.makeText(this, "Download fehlgeschlagen, öffne Browser...", Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
-                    promptSessionCount();
+                    checkSavedSessionSetup();
                 });
             }
         }).start();
@@ -332,13 +342,39 @@ public class MainActivity extends Activity {
             startActivity(installIntent);
         } catch (Exception e) {
             Toast.makeText(this, "Installer-Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            promptSessionCount();
+            checkSavedSessionSetup();
         }
     }
 
     // ==========================================
-    // SCHRITT 1 & 2: SESSIONS & ROLLEN-AUSWAHL
+    // GESPEICHERTES SETUP LADEN ODER NEU WÄHLEN
     // ==========================================
+    private void checkSavedSessionSetup() {
+        boolean hasSaved = prefs.getBoolean("has_saved_setup", false);
+        if (hasSaved) {
+            totalSavedSessions = prefs.getInt("saved_total_sessions", 1);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Gespeichertes Setup (").append(totalSavedSessions).append(" Sessions):\n");
+            for (int i = 0; i < totalSavedSessions; i++) {
+                int r = prefs.getInt("role_session_" + i, ROLE_DD);
+                sessionRoles[i] = r;
+                String rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
+                sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
+            }
+            sb.append("\nMöchtest du dieses Setup erneut übernehmen?");
+
+            new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                    .setTitle("Setup übernehmen?")
+                    .setMessage(sb.toString())
+                    .setCancelable(false)
+                    .setPositiveButton("Ja, übernehmen", (dialog, which) -> launchSessions(totalSavedSessions))
+                    .setNegativeButton("Neu einrichten", (dialog, which) -> promptSessionCount())
+                    .show();
+        } else {
+            promptSessionCount();
+        }
+    }
+
     private void promptSessionCount() {
         final String[] options = {
                 "1 Session (Vollbild)", "2 Sessions", "3 Sessions", "4 Sessions",
@@ -349,11 +385,13 @@ public class MainActivity extends Activity {
         builder.setTitle("Wie viele Sessions starten?")
                 .setCancelable(false)
                 .setItems(options, (dialog, which) -> {
-                    int totalSessions = which + 1;
-                    if (totalSessions == 1) {
+                    totalSavedSessions = which + 1;
+                    if (totalSavedSessions == 1) {
                         sessionRoles[0] = ROLE_DD;
+                        saveCurrentSetup(1);
+                        launchSessions(1);
                     } else {
-                        promptSessionRole(0, totalSessions);
+                        promptSessionRole(0, totalSavedSessions);
                     }
                 })
                 .show();
@@ -361,7 +399,6 @@ public class MainActivity extends Activity {
 
     private void promptSessionRole(final int currentSessionIndex, final int totalSessions) {
         final String[] roles = {"Main (DD)", "Heal (RM / Support)", "Leech"};
-
         String sessionName = (currentSessionIndex == 0) ? "Hauptfenster (Vollbild)" : "Overlay " + (currentSessionIndex + 1);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
@@ -373,27 +410,43 @@ public class MainActivity extends Activity {
                     if (currentSessionIndex + 1 < totalSessions) {
                         promptSessionRole(currentSessionIndex + 1, totalSessions);
                     } else {
-                        int overlayCount = totalSessions - 1;
-                        for (int i = 0; i < overlayCount; i++) {
-                            int clientIndex = i + 1;
-                            createOverlaySession(clientIndex + 1, CLIENT_COLORS[i % CLIENT_COLORS.length], i, sessionRoles[clientIndex]);
-                        }
+                        saveCurrentSetup(totalSessions);
+                        launchSessions(totalSessions);
                     }
                 })
                 .show();
     }
 
+    private void saveCurrentSetup(int count) {
+        SharedPreferences.Editor ed = prefs.edit();
+        ed.putBoolean("has_saved_setup", true);
+        ed.putInt("saved_total_sessions", count);
+        for (int i = 0; i < count; i++) {
+            ed.putInt("role_session_" + i, sessionRoles[i]);
+        }
+        ed.apply();
+    }
+
+    private void launchSessions(int totalSessions) {
+        int overlayCount = totalSessions - 1;
+        for (int i = 0; i < overlayCount; i++) {
+            int clientIndex = i + 1;
+            createOverlaySession(clientIndex + 1, CLIENT_COLORS[i % CLIENT_COLORS.length], i, sessionRoles[clientIndex]);
+        }
+    }
+
     // ==========================================
-    // MULTI-SESSION OVERLAYS & ROLLEN-BUTTONS
+    // MULTI-SESSION OVERLAYS & KOORDINATEN-LERNER
     // ==========================================
     @SuppressLint("ClickableViewAccessibility")
     private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
         float density = getResources().getDisplayMetrics().density;
         final int overlayIndex = index;
+        final int clientUid = clientNumber;
 
         FrameLayout container = new FrameLayout(this);
-        int defaultWidth = (int) (260 * density);
-        int defaultHeight = (int) (170 * density);
+        int defaultWidth = (int) (270 * density);
+        int defaultHeight = (int) (175 * density);
 
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(defaultWidth, defaultHeight);
         containerParams.leftMargin = (int) (12 * density + (index * 24 * density));
@@ -406,6 +459,7 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
+        // WebView
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -417,6 +471,7 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
+        // Quick-Action Dock (Oben)
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
@@ -452,21 +507,76 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
+        final boolean[] isRecordingMode = {false};
+        final String[] targetKeyToRecord = {""};
+
+        TextView btnHeal = null;
+        TextView btnBuff = null;
+        TextView btnFollow = null;
+        TextView btnBuffFast = null;
+
         if (role == ROLE_HEAL) {
-            TextView btnHeal = createDockButton("Heal", accentColor, density);
-            btnHeal.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
+            btnHeal = createDockButton("Heal", accentColor, density);
+            final TextView finalBtnHeal = btnHeal;
+            btnHeal.setOnClickListener(v -> {
+                if (isRecordingMode[0]) {
+                    targetKeyToRecord[0] = "heal";
+                    Toast.makeText(this, "Tippe jetzt auf dem Client auf das HEAL-Icon!", Toast.LENGTH_SHORT).show();
+                    finalBtnHeal.setTextColor(Color.YELLOW);
+                } else {
+                    executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49);
+                }
+            });
             topDock.addView(btnHeal);
 
-            TextView btnBuff = createDockButton("Buff", accentColor, density);
-            btnBuff.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
+            btnBuff = createDockButton("Buff", accentColor, density);
+            btnBuff.setOnClickListener(v -> {
+                if (isRecordingMode[0]) {
+                    promptBuffCountDialog(clientUid, isRecordingMode, targetKeyToRecord);
+                } else {
+                    executeRecordedBuffSequence(webView, clientUid);
+                }
+            });
             topDock.addView(btnBuff);
 
-            TextView btnFollow = createDockButton("Fol", accentColor, density);
-            btnFollow.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit3", 51));
+            btnBuffFast = createDockButton("BFast", accentColor, density);
+            final TextView finalBtnFast = btnBuffFast;
+            btnBuffFast.setOnClickListener(v -> {
+                if (isRecordingMode[0]) {
+                    targetKeyToRecord[0] = "bfast";
+                    Toast.makeText(this, "Tippe jetzt auf das Fast-Buff/Skill-Icon!", Toast.LENGTH_SHORT).show();
+                    finalBtnFast.setTextColor(Color.YELLOW);
+                } else {
+                    executeRecordedTap(webView, "c" + clientUid + "_bfast", "Digit4", 52);
+                }
+            });
+            topDock.addView(btnBuffFast);
+
+            btnFollow = createDockButton("Fol", accentColor, density);
+            final TextView finalBtnFol = btnFollow;
+            btnFollow.setOnClickListener(v -> {
+                if (isRecordingMode[0]) {
+                    targetKeyToRecord[0] = "follow";
+                    Toast.makeText(this, "Tippe jetzt auf das FOLLOW-Icon!", Toast.LENGTH_SHORT).show();
+                    finalBtnFol.setTextColor(Color.YELLOW);
+                } else {
+                    executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit3", 51);
+                }
+            });
             topDock.addView(btnFollow);
+
         } else if (role == ROLE_LEECH) {
-            TextView btnFollow = createDockButton("Fol", accentColor, density);
-            btnFollow.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
+            btnFollow = createDockButton("Fol", accentColor, density);
+            final TextView finalBtnFol2 = btnFollow;
+            btnFollow.setOnClickListener(v -> {
+                if (isRecordingMode[0]) {
+                    targetKeyToRecord[0] = "follow";
+                    Toast.makeText(this, "Tippe jetzt auf das FOLLOW-Icon!", Toast.LENGTH_SHORT).show();
+                    finalBtnFol2.setTextColor(Color.YELLOW);
+                } else {
+                    executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit1", 49);
+                }
+            });
             topDock.addView(btnFollow);
 
             TextView btnCheer = createDockButton("Cheer", accentColor, density);
@@ -481,6 +591,20 @@ public class MainActivity extends Activity {
             btnSkill.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
             topDock.addView(btnSkill);
         }
+
+        TextView btnSettings = createDockButton("⚙", accentColor, density);
+        btnSettings.setOnClickListener(v -> {
+            isRecordingMode[0] = !isRecordingMode[0];
+            if (isRecordingMode[0]) {
+                btnSettings.setTextColor(Color.RED);
+                Toast.makeText(this, "AUFNAHME-MODUS AKTIV: Button wählen und auf Skill tippen!", Toast.LENGTH_LONG).show();
+            } else {
+                btnSettings.setTextColor(Color.WHITE);
+                targetKeyToRecord[0] = "";
+                Toast.makeText(this, "Aufnahme-Modus beendet.", Toast.LENGTH_SHORT).show();
+            }
+        });
+        topDock.addView(btnSettings);
 
         final boolean[] isTransparent = {false};
         TextView btnGhost = createDockButton("👻", accentColor, density);
@@ -516,6 +640,35 @@ public class MainActivity extends Activity {
         topDock.addView(btnLock);
 
         container.addView(topDock);
+
+        // Touch-Listener zum Aufzeichnen von Klicks
+        webView.setOnTouchListener((v, event) -> {
+            if (isRecordingMode[0] && !targetKeyToRecord[0].isEmpty() && event.getAction() == MotionEvent.ACTION_UP) {
+                float clickX = event.getX();
+                float clickY = event.getY();
+                float width = v.getWidth();
+                float height = v.getHeight();
+
+                if (width > 0 && height > 0) {
+                    float relX = clickX / width;
+                    float relY = clickY / height;
+
+                    if (targetKeyToRecord[0].startsWith("buff_step_")) {
+                        prefs.edit().putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_x", relX)
+                                .putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_y", relY).apply();
+                        Toast.makeText(this, "Gespeichert: " + targetKeyToRecord[0], Toast.LENGTH_SHORT).show();
+                        advanceBuffRecording(clientUid, targetKeyToRecord, isRecordingMode);
+                    } else {
+                        prefs.edit().putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_x", relX)
+                                .putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_y", relY).apply();
+                        Toast.makeText(this, "Position für " + targetKeyToRecord[0].toUpperCase() + " gespeichert!", Toast.LENGTH_SHORT).show();
+                        targetKeyToRecord[0] = "";
+                    }
+                }
+                return false;
+            }
+            return false;
+        });
 
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
@@ -566,11 +719,13 @@ public class MainActivity extends Activity {
                         }
                     }
 
+                    // Minimieren mit INVISIBLE statt GONE (damit Klicks im Hintergrund aktiv bleiben)
                     if (duration < 250 && event.getX() < 40 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
-                            webView.setVisibility(View.GONE);
+
+                            webView.setVisibility(View.INVISIBLE);
                             resizeHandle.setVisibility(View.GONE);
                             for (int i = 1; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.GONE);
@@ -648,6 +803,97 @@ public class MainActivity extends Activity {
             }
             return false;
         });
+    }
+
+    // ==========================================
+    // MULTI-BUFF SEQUENZ-SETUP
+    // ==========================================
+    private void promptBuffCountDialog(int clientUid, boolean[] isRecordingMode, String[] targetKeyToRecord) {
+        final EditText input = new EditText(this);
+        input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+        input.setHint("Anzahl (1 bis 15)");
+
+        new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Buff-Sequenz aufnehmen")
+                .setMessage("Wie viele Buffs möchtest du hintereinander ausführen? (1 - 15):")
+                .setView(input)
+                .setPositiveButton("Starten", (dialog, which) -> {
+                    int count = 1;
+                    try {
+                        count = Integer.parseInt(input.getText().toString());
+                    } catch (Exception ignored) {}
+                    if (count < 1) count = 1;
+                    if (count > 15) count = 15;
+
+                    prefs.edit().putInt("c" + clientUid + "_buff_count", count).apply();
+                    targetKeyToRecord[0] = "buff_step_1";
+                    Toast.makeText(this, "Tippe jetzt Buff 1 von " + count + " an!", Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Abbrechen", null)
+                .show();
+    }
+
+    private void advanceBuffRecording(int clientUid, String[] targetKeyToRecord, boolean[] isRecordingMode) {
+        int total = prefs.getInt("c" + clientUid + "_buff_count", 1);
+        try {
+            int currentStep = Integer.parseInt(targetKeyToRecord[0].replace("buff_step_", ""));
+            if (currentStep < total) {
+                targetKeyToRecord[0] = "buff_step_" + (currentStep + 1);
+                Toast.makeText(this, "Tippe jetzt Buff " + (currentStep + 1) + " von " + total + " an!", Toast.LENGTH_SHORT).show();
+            } else {
+                Toast.makeText(this, "Alle " + total + " Buffs gespeichert!", Toast.LENGTH_LONG).show();
+                targetKeyToRecord[0] = "";
+                isRecordingMode[0] = false;
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void executeRecordedTap(WebView wv, String prefKey, String fallbackCode, int fallbackKeyCode) {
+        if (prefs.contains(prefKey + "_x")) {
+            float rx = prefs.getFloat(prefKey + "_x", 0.5f);
+            float ry = prefs.getFloat(prefKey + "_y", 0.5f);
+            dispatchRelativeTouch(wv, rx, ry);
+        } else {
+            sendGameKeyEvent(wv, fallbackCode, fallbackKeyCode);
+        }
+    }
+
+    private void executeRecordedBuffSequence(WebView wv, int clientUid) {
+        int total = prefs.getInt("c" + clientUid + "_buff_count", 0);
+        if (total == 0) {
+            sendGameKeyEvent(wv, "Digit2", 50);
+            return;
+        }
+
+        Toast.makeText(this, "Buffe " + total + " Skills...", Toast.LENGTH_SHORT).show();
+        Handler h = new Handler(Looper.getMainLooper());
+        for (int i = 1; i <= total; i++) {
+            final int step = i;
+            h.postDelayed(() -> {
+                String key = "c" + clientUid + "_buff_step_" + step;
+                if (prefs.contains(key + "_x")) {
+                    float rx = prefs.getFloat(key + "_x", 0.5f);
+                    float ry = prefs.getFloat(key + "_y", 0.5f);
+                    dispatchRelativeTouch(wv, rx, ry);
+                }
+            }, (long) (i - 1) * 350);
+        }
+    }
+
+    // Löst Klicks direkt im HTML5-Canvas aus (auch wenn die View minimiert / invisible ist)
+    private void dispatchRelativeTouch(WebView wv, float relX, float relY) {
+        if (wv == null) return;
+        String js = "(function() {" +
+                "  var canvas = document.querySelector('canvas') || document.body;" +
+                "  var rect = canvas.getBoundingClientRect();" +
+                "  var clientX = rect.left + (rect.width * " + relX + ");" +
+                "  var clientY = rect.top + (rect.height * " + relY + ");" +
+                "  var opts = {bubbles: true, cancelable: true, view: window, clientX: clientX, clientY: clientY};" +
+                "  canvas.dispatchEvent(new MouseEvent('mousedown', opts));" +
+                "  canvas.dispatchEvent(new MouseEvent('mouseup', opts));" +
+                "  canvas.dispatchEvent(new MouseEvent('click', opts));" +
+                "})();";
+        wv.evaluateJavascript(js, null);
     }
 
     private TextView createDockButton(String text, int accentColor, float density) {
