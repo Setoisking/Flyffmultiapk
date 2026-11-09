@@ -12,9 +12,9 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
@@ -28,7 +28,6 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -41,9 +40,11 @@ import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
@@ -58,6 +59,7 @@ public class MainActivity extends Activity {
 
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
+    private static final String CSV_FILE_NAME = "flyff_accounts.csv";
     private SharedPreferences prefs;
 
     public static final int ROLE_DD = 0;
@@ -98,6 +100,9 @@ public class MainActivity extends Activity {
         prefs = getSharedPreferences("FlyffMultiClient_Prefs", MODE_PRIVATE);
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
+
+        // Prüft beim Start, ob die Datei existiert. Falls nicht -> automatisch anlegen
+        ensureCsvFileExists();
 
         WebView mainWebView = findViewById(R.id.webView1);
         configureWebView(mainWebView, 1, false);
@@ -162,6 +167,61 @@ public class MainActivity extends Activity {
                 }
             }
         }
+    }
+
+    // ==========================================
+    // CSV DOWNLOAD-DATEI (ERSTELLEN & AUSLESEN)
+    // ==========================================
+    private File getAccountsCsvFile() {
+        File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+        return new File(downloadDir, CSV_FILE_NAME);
+    }
+
+    private void ensureCsvFileExists() {
+        File csv = getAccountsCsvFile();
+        if (!csv.exists()) {
+            try {
+                FileOutputStream fos = new FileOutputStream(csv);
+                OutputStreamWriter writer = new OutputStreamWriter(fos);
+                writer.write("session,email,password\n");
+                writer.write("1,,\n");
+                writer.write("2,,\n");
+                writer.write("3,,\n");
+                writer.write("4,,\n");
+                writer.write("5,,\n");
+                writer.write("6,,\n");
+                writer.write("7,,\n");
+                writer.write("8,,\n");
+                writer.flush();
+                writer.close();
+                fos.close();
+                Toast.makeText(this, "Vorlage 'flyff_accounts.csv' in Downloads erstellt!", Toast.LENGTH_LONG).show();
+            } catch (Exception ignored) {}
+        }
+    }
+
+    private String[] readAccountFromCsv(int sessionId) {
+        File csv = getAccountsCsvFile();
+        if (!csv.exists()) return new String[]{"", ""};
+
+        try {
+            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(csv)));
+            String line;
+            while ((line = br.readLine()) != null) {
+                String[] parts = line.split(",", -1);
+                if (parts.length >= 3) {
+                    try {
+                        int sid = Integer.parseInt(parts[0].trim());
+                        if (sid == sessionId) {
+                            br.close();
+                            return new String[]{parts[1].trim(), parts[2].trim()};
+                        }
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            br.close();
+        } catch (Exception ignored) {}
+        return new String[]{"", ""};
     }
 
     // ==========================================
@@ -438,7 +498,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // MULTI-SESSION OVERLAYS & ADVANCED LOGIK
+    // MULTI-SESSION OVERLAYS & BEDIENUNG
     // ==========================================
     @SuppressLint("ClickableViewAccessibility")
     private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
@@ -472,7 +532,6 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // Obere Schnellleiste
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
@@ -527,7 +586,7 @@ public class MainActivity extends Activity {
             btnHeal.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     targetKeyToRecord[0] = "heal";
-                    Toast.makeText(this, "Tippe jetzt auf dem Client auf das HEAL-Icon!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, "Tippe jetzt auf das HEAL-Icon!", Toast.LENGTH_SHORT).show();
                     finalBtnHeal.setTextColor(Color.YELLOW);
                 } else {
                     executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49);
@@ -623,8 +682,16 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
+        // Auto-Login: Liest Daten aus Download/flyff_accounts.csv
         TextView btnAutoLogin = createDockButton("Key", accentColor, density);
-        btnAutoLogin.setOnClickListener(v -> promptAccountCredentialsDialog(clientUid, webView));
+        btnAutoLogin.setOnClickListener(v -> {
+            String[] acc = readAccountFromCsv(clientUid);
+            if (acc[0].isEmpty() && acc[1].isEmpty()) {
+                Toast.makeText(this, "Keine Zugangsdaten in Download/flyff_accounts.csv für Session " + clientUid + " gefunden!", Toast.LENGTH_LONG).show();
+            } else {
+                injectCredentials(webView, acc[0], acc[1]);
+            }
+        });
         topDock.addView(btnAutoLogin);
 
         TextView btnSettings = createDockButton("⚙", accentColor, density);
@@ -678,9 +745,7 @@ public class MainActivity extends Activity {
 
         startHpWatcherLoop(webView, clientUid, floatingBadge, accentColor);
 
-        // ==========================================
-        // PUNKT 5: AKKU- & THERMAL-GUARD (AUTO-DIMMING)
-        // ==========================================
+        // Akku- & Thermal-Guard
         final Handler thermalHandler = new Handler(Looper.getMainLooper());
         final boolean[] isDimmed = {false};
 
@@ -691,7 +756,6 @@ public class MainActivity extends Activity {
             }
         };
 
-        // Timer starten (20 Sekunden Inaktivität)
         thermalHandler.postDelayed(dimmingTask, 20000);
 
         Runnable resetDimmingTimer = () -> {
@@ -878,44 +942,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void promptAccountCredentialsDialog(int clientUid, WebView webView) {
-        String savedUser = prefs.getString("c" + clientUid + "_login_user", "");
-        String savedPass = prefs.getString("c" + clientUid + "_login_pass", "");
-
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(40, 20, 40, 10);
-
-        final EditText userInput = new EditText(this);
-        userInput.setHint("E-Mail / Benutzername");
-        userInput.setText(savedUser);
-        layout.addView(userInput);
-
-        final EditText passInput = new EditText(this);
-        passInput.setHint("Passwort");
-        passInput.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        passInput.setText(savedPass);
-        layout.addView(passInput);
-
-        new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("Quick-Login Client " + clientUid)
-                .setView(layout)
-                .setPositiveButton("Auto-Login", (dialog, which) -> {
-                    String u = userInput.getText().toString().trim();
-                    String p = passInput.getText().toString().trim();
-                    prefs.edit().putString("c" + clientUid + "_login_user", u)
-                            .putString("c" + clientUid + "_login_pass", p).apply();
-                    injectCredentials(webView, u, p);
-                })
-                .setNeutralButton("Speichern", (dialog, which) -> {
-                    prefs.edit().putString("c" + clientUid + "_login_user", userInput.getText().toString().trim())
-                            .putString("c" + clientUid + "_login_pass", passInput.getText().toString().trim()).apply();
-                    Toast.makeText(this, "Login gespeichert", Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("Abbrechen", null)
-                .show();
-    }
-
     private void injectCredentials(WebView wv, String user, String pass) {
         if (wv == null) return;
         String js = "(function() {" +
@@ -932,7 +958,7 @@ public class MainActivity extends Activity {
                 "  }" +
                 "})();";
         wv.evaluateJavascript(js, null);
-        Toast.makeText(this, "Login-Daten ausgefüllt", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Login-Daten aus CSV eingefügt", Toast.LENGTH_SHORT).show();
     }
 
     private void startHpWatcherLoop(WebView wv, int clientUid, TextView badgeView, int defaultColor) {
@@ -965,7 +991,7 @@ public class MainActivity extends Activity {
     }
 
     private void promptBuffCountDialog(int clientUid, boolean[] isRecordingMode, String[] targetKeyToRecord) {
-        final EditText input = new EditText(this);
+        final android.widget.EditText input = new android.widget.EditText(this);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
         input.setHint("Anzahl (1 bis 15)");
 
