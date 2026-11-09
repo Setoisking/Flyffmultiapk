@@ -27,6 +27,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -55,6 +56,12 @@ public class MainActivity extends Activity {
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
 
+    // Client Rollen: 0 = DD (Main), 1 = Heal (RM), 2 = Leech
+    public static final int ROLE_DD = 0;
+    public static final int ROLE_HEAL = 1;
+    public static final int ROLE_LEECH = 2;
+    private int[] sessionRoles = new int[8];
+
     private final int[] CLIENT_COLORS = {
             Color.parseColor("#00E676"), // C2: Grün
             Color.parseColor("#00E5FF"), // C3: Cyan
@@ -80,7 +87,7 @@ public class MainActivity extends Activity {
         overlayLayer = findViewById(R.id.overlayLayer);
 
         WebView mainWebView = findViewById(R.id.webView1);
-        configureWebView(mainWebView, 1);
+        configureWebView(mainWebView, 1, false);
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
@@ -108,9 +115,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // FOLDABLE ANPASSUNG (AUF- & ZUKLAPPEN)
-    // ==========================================
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
@@ -119,14 +123,29 @@ public class MainActivity extends Activity {
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int screenW = dm.widthPixels;
         int screenH = dm.heightPixels;
+        float density = dm.density;
 
-        for (FrameLayout container : overlayContainers) {
+        boolean isExpandedFoldable = screenW > 1200 && (float) screenW / screenH < 1.6f;
+
+        for (int i = 0; i < overlayContainers.size(); i++) {
+            FrameLayout container = overlayContainers.get(i);
             if (container != null) {
-                if (container.getX() + container.getWidth() > screenW) {
-                    container.setX(Math.max(0, screenW - container.getWidth() - 20));
-                }
-                if (container.getY() + container.getHeight() > screenH) {
-                    container.setY(Math.max(0, screenH - container.getHeight() - 20));
+                if (isExpandedFoldable) {
+                    int overlayW = (int) (260 * density);
+                    int overlayH = (int) (170 * density);
+                    ViewGroup.LayoutParams p = container.getLayoutParams();
+                    p.width = overlayW;
+                    p.height = overlayH;
+                    container.setLayoutParams(p);
+                    container.setX(screenW - overlayW - (8 * density));
+                    container.setY((20 * density) + (i * (overlayH + (10 * density))));
+                } else {
+                    if (container.getX() + container.getWidth() > screenW) {
+                        container.setX(Math.max(0, screenW - container.getWidth() - (10 * density)));
+                    }
+                    if (container.getY() + container.getHeight() > screenH) {
+                        container.setY(Math.max(0, screenH - container.getHeight() - (10 * density)));
+                    }
                 }
             }
         }
@@ -246,7 +265,6 @@ public class MainActivity extends Activity {
                 int responseCode;
                 int redirectCount = 0;
 
-                // Weiterleitungen von GitHub (302 -> AWS S3) auflösen
                 while (redirectCount < 5) {
                     URL u = new URL(targetUrl);
                     conn = (HttpURLConnection) u.openConnection();
@@ -319,7 +337,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // MULTI-SESSION OVERLAYS & VIEW SWAP
+    // SCHRITT 1 & 2: SESSIONS & ROLLEN-AUSWAHL
     // ==========================================
     private void promptSessionCount() {
         final String[] options = {
@@ -328,65 +346,181 @@ public class MainActivity extends Activity {
         };
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
-        builder.setTitle("Sessions wählen")
+        builder.setTitle("Wie viele Sessions starten?")
                 .setCancelable(false)
                 .setItems(options, (dialog, which) -> {
                     int totalSessions = which + 1;
-                    int overlayCount = totalSessions - 1;
-                    for (int i = 0; i < overlayCount; i++) {
-                        createOverlaySession(i + 2, CLIENT_COLORS[i % CLIENT_COLORS.length], i);
+                    if (totalSessions == 1) {
+                        sessionRoles[0] = ROLE_DD;
+                    } else {
+                        promptSessionRole(0, totalSessions);
                     }
                 })
                 .show();
     }
 
+    // Schritt 2: Rollen für jede gewählte Session festlegen
+    private void promptSessionRole(final int currentSessionIndex, final int totalSessions) {
+        final String[] roles = {"Main (DD)", "Heal (RM / Support)", "Leech"};
+
+        String sessionName = (currentSessionIndex == 0) ? "Hauptfenster (Vollbild)" : "Overlay " + (currentSessionIndex + 1);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
+        builder.setTitle("Rolle für Session " + (currentSessionIndex + 1) + " (" + sessionName + ")")
+                .setCancelable(false)
+                .setItems(roles, (dialog, which) -> {
+                    sessionRoles[currentSessionIndex] = which; // 0 = DD, 1 = Heal, 2 = Leech
+
+                    if (currentSessionIndex + 1 < totalSessions) {
+                        promptSessionRole(currentSessionIndex + 1, totalSessions);
+                    } else {
+                        // Alle Rollen gewählt -> Overlays initialisieren
+                        int overlayCount = totalSessions - 1;
+                        for (int i = 0; i < overlayCount; i++) {
+                            int clientIndex = i + 1;
+                            createOverlaySession(clientIndex + 1, CLIENT_COLORS[i % CLIENT_COLORS.length], i, sessionRoles[clientIndex]);
+                        }
+                    }
+                })
+                .show();
+    }
+
+    // ==========================================
+    // MULTI-SESSION OVERLAYS & ROLLEN-BUTTONS
+    // ==========================================
     @SuppressLint("ClickableViewAccessibility")
-    private void createOverlaySession(int clientNumber, int accentColor, int index) {
+    private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
         float density = getResources().getDisplayMetrics().density;
         final int overlayIndex = index;
 
         FrameLayout container = new FrameLayout(this);
-        int defaultWidth = (int) (250 * density);
-        int defaultHeight = (int) (160 * density);
+        int defaultWidth = (int) (260 * density);
+        int defaultHeight = (int) (170 * density);
 
         FrameLayout.LayoutParams containerParams = new FrameLayout.LayoutParams(defaultWidth, defaultHeight);
-        containerParams.leftMargin = (int) (10 * density + (index * 20 * density));
-        containerParams.topMargin = (int) (40 * density + (index * 20 * density));
+        containerParams.leftMargin = (int) (12 * density + (index * 24 * density));
+        containerParams.topMargin = (int) (40 * density + (index * 24 * density));
         container.setLayoutParams(containerParams);
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#151518"));
-        bg.setCornerRadius(6 * density);
+        bg.setColor(Color.parseColor("#18181C"));
+        bg.setCornerRadius(8 * density);
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
+        // WebView
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        webParams.topMargin = (int) (28 * density);
         webView.setLayoutParams(webParams);
-        configureWebView(webView, clientNumber);
+        configureWebView(webView, clientNumber, true);
         webView.loadUrl("https://universe.flyff.com/play");
         setClientAudioMuted(webView, true);
         activeWebViews.add(webView);
         container.addView(webView);
+
+        // Quick-Action Dock
+        LinearLayout topDock = new LinearLayout(this);
+        FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
+        dockParams.gravity = Gravity.TOP;
+        topDock.setLayoutParams(dockParams);
+        topDock.setOrientation(LinearLayout.HORIZONTAL);
+        topDock.setGravity(Gravity.CENTER_VERTICAL);
+        topDock.setBackgroundColor(Color.parseColor("#CC101014"));
+        topDock.setPadding((int) (4 * density), 0, (int) (4 * density), 0);
+
+        // Rollen-Badge-Kürzel
+        String badgeText = "C" + clientNumber;
+        if (role == ROLE_HEAL) badgeText = "RM";
+        else if (role == ROLE_LEECH) badgeText = "LC";
+        else if (role == ROLE_DD) badgeText = "DD";
 
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
 
         TextView floatingBadge = new TextView(this);
-        FrameLayout.LayoutParams badgeParams = new FrameLayout.LayoutParams((int) (32 * density), (int) (32 * density));
-        badgeParams.gravity = Gravity.TOP | Gravity.START;
-        badgeParams.leftMargin = (int) (4 * density);
-        badgeParams.topMargin = (int) (4 * density);
+        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         floatingBadge.setLayoutParams(badgeParams);
-        floatingBadge.setText("C" + clientNumber);
+        floatingBadge.setText(badgeText);
         floatingBadge.setTextColor(Color.WHITE);
-        floatingBadge.setTextSize(10);
+        floatingBadge.setTextSize(9);
         floatingBadge.setGravity(Gravity.CENTER);
         floatingBadge.setBackground(badgeBg);
-        container.addView(floatingBadge);
+        topDock.addView(floatingBadge);
 
+        // Buttons anhand der gewählten Rolle erzeugen
+        if (role == ROLE_HEAL) {
+            TextView btnHeal = createDockButton("Heal", accentColor, density);
+            btnHeal.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
+            topDock.addView(btnHeal);
+
+            TextView btnBuff = createDockButton("Buff", accentColor, density);
+            btnBuff.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
+            topDock.addView(btnBuff);
+
+            TextView btnFollow = createDockButton("Fol", accentColor, density);
+            btnFollow.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit3", 51));
+            topDock.addView(btnFollow);
+        } else if (role == ROLE_LEECH) {
+            TextView btnFollow = createDockButton("Fol", accentColor, density);
+            btnFollow.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
+            topDock.addView(btnFollow);
+
+            TextView btnCheer = createDockButton("Cheer", accentColor, density);
+            btnCheer.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
+            topDock.addView(btnCheer);
+        } else {
+            // DD
+            TextView btnAtk = createDockButton("Atk", accentColor, density);
+            btnAtk.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
+            topDock.addView(btnAtk);
+
+            TextView btnSkill = createDockButton("Skill", accentColor, density);
+            btnSkill.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
+            topDock.addView(btnSkill);
+        }
+
+        // Transparenz / Ghost Toggle
+        final boolean[] isTransparent = {false};
+        TextView btnGhost = createDockButton("👻", accentColor, density);
+        btnGhost.setOnClickListener(v -> {
+            if (!isTransparent[0]) {
+                container.setAlpha(0.65f);
+                isTransparent[0] = true;
+                btnGhost.setTextColor(Color.YELLOW);
+            } else {
+                container.setAlpha(1.0f);
+                isTransparent[0] = false;
+                btnGhost.setTextColor(Color.WHITE);
+            }
+        });
+        topDock.addView(btnGhost);
+
+        // Ghost-Touch Lock
+        final boolean[] isTouchLocked = {false};
+        TextView btnLock = createDockButton("🔓", accentColor, density);
+        btnLock.setOnClickListener(v -> {
+            if (!isTouchLocked[0]) {
+                webView.setOnTouchListener((view, motionEvent) -> false);
+                isTouchLocked[0] = true;
+                btnLock.setText("🔒");
+                btnLock.setTextColor(Color.RED);
+                Toast.makeText(this, badgeText + ": Ghost-Touch aktiv", Toast.LENGTH_SHORT).show();
+            } else {
+                webView.setOnTouchListener(null);
+                isTouchLocked[0] = false;
+                btnLock.setText("🔓");
+                btnLock.setTextColor(Color.WHITE);
+            }
+        });
+        topDock.addView(btnLock);
+
+        container.addView(topDock);
+
+        // Resize Handle
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
@@ -408,7 +542,7 @@ public class MainActivity extends Activity {
         final int[] savedHeight = {defaultHeight};
         final boolean[] isMinimized = {false};
 
-        floatingBadge.setOnTouchListener((v, event) -> {
+        topDock.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dX[0] = container.getX() - event.getRawX();
@@ -426,25 +560,40 @@ public class MainActivity extends Activity {
                     v.getParent().requestDisallowInterceptTouchEvent(false);
                     long duration = System.currentTimeMillis() - downTime[0];
 
-                    if (duration < 250) {
+                    if (!isMinimized[0]) {
+                        DisplayMetrics dm = getResources().getDisplayMetrics();
+                        float snapThreshold = 35 * density;
+                        if (container.getX() < snapThreshold) container.setX(4 * density);
+                        if (container.getY() < snapThreshold) container.setY(4 * density);
+                        if (container.getX() + container.getWidth() > dm.widthPixels - snapThreshold) {
+                            container.setX(dm.widthPixels - container.getWidth() - (4 * density));
+                        }
+                    }
+
+                    // Klick auf Badge (unter 250ms) = Minimieren
+                    if (duration < 250 && event.getX() < 40 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
-                            View clientView = container.getChildAt(0);
-                            if (clientView != null) clientView.setVisibility(View.GONE);
+                            webView.setVisibility(View.GONE);
                             resizeHandle.setVisibility(View.GONE);
+                            for (int i = 1; i < topDock.getChildCount(); i++) {
+                                topDock.getChildAt(i).setVisibility(View.GONE);
+                            }
                             container.setBackground(null);
 
                             ViewGroup.LayoutParams p = container.getLayoutParams();
-                            p.width = (int) (36 * density);
-                            p.height = (int) (36 * density);
+                            p.width = (int) (32 * density);
+                            p.height = (int) (32 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
                             setClientLowSpecMode(webView, true);
                         } else {
-                            View clientView = container.getChildAt(0);
-                            if (clientView != null) clientView.setVisibility(View.VISIBLE);
+                            webView.setVisibility(View.VISIBLE);
                             resizeHandle.setVisibility(View.VISIBLE);
+                            for (int i = 1; i < topDock.getChildCount(); i++) {
+                                topDock.getChildAt(i).setVisibility(View.VISIBLE);
+                            }
                             container.setBackground(bg);
 
                             ViewGroup.LayoutParams p = container.getLayoutParams();
@@ -457,7 +606,8 @@ public class MainActivity extends Activity {
                         return true;
                     }
 
-                    if (duration >= 600) {
+                    // Langer Druck auf Badge = Vollbild Swap ohne Reload
+                    if (duration >= 600 && event.getX() < 40 * density) {
                         swapViewsWithoutReload(overlayIndex);
                         return true;
                     }
@@ -488,8 +638,8 @@ public class MainActivity extends Activity {
                 case MotionEvent.ACTION_MOVE:
                     float deltaX = event.getRawX() - startX[0];
                     float deltaY = event.getRawY() - startY[0];
-                    int newW = (int) Math.max(120 * density, startW[0] + deltaX);
-                    int newH = (int) Math.max(90 * density, startH[0] + deltaY);
+                    int newW = (int) Math.max(160 * density, startW[0] + deltaX);
+                    int newH = (int) Math.max(100 * density, startH[0] + deltaY);
 
                     ViewGroup.LayoutParams p = container.getLayoutParams();
                     p.width = newW;
@@ -506,21 +656,63 @@ public class MainActivity extends Activity {
         });
     }
 
+    private TextView createDockButton(String text, int accentColor, float density) {
+        TextView btn = new TextView(this);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams((int) (34 * density), (int) (22 * density));
+        p.leftMargin = (int) (4 * density);
+        btn.setLayoutParams(p);
+        btn.setText(text);
+        btn.setTextColor(Color.WHITE);
+        btn.setTextSize(9);
+        btn.setGravity(Gravity.CENTER);
+
+        GradientDrawable b = new GradientDrawable();
+        b.setColor(Color.parseColor("#44222226"));
+        b.setCornerRadius(4 * density);
+        b.setStroke(1, accentColor);
+        btn.setBackground(b);
+        return btn;
+    }
+
+    private void sendGameKeyEvent(WebView wv, String code, int keyCode) {
+        if (wv == null) return;
+        String js = "(function() {" +
+                "  var evDown = new KeyboardEvent('keydown', {key: '" + code + "', code: '" + code + "', keyCode: " + keyCode + ", which: " + keyCode + ", bubbles: true});" +
+                "  var evUp = new KeyboardEvent('keyup', {key: '" + code + "', code: '" + code + "', keyCode: " + keyCode + ", which: " + keyCode + ", bubbles: true});" +
+                "  window.dispatchEvent(evDown);" +
+                "  document.dispatchEvent(evDown);" +
+                "  setTimeout(function() { window.dispatchEvent(evUp); document.dispatchEvent(evUp); }, 60);" +
+                "})();";
+        wv.evaluateJavascript(js, null);
+    }
+
     private void swapViewsWithoutReload(int targetOverlayIndex) {
         FrameLayout targetContainer = overlayContainers.get(targetOverlayIndex);
 
         WebView viewA = (WebView) rootContainer.getChildAt(0);
-        WebView viewB = (WebView) targetContainer.getChildAt(0);
+        WebView viewB = null;
+
+        for (int i = 0; i < targetContainer.getChildCount(); i++) {
+            if (targetContainer.getChildAt(i) instanceof WebView) {
+                viewB = (WebView) targetContainer.getChildAt(i);
+                break;
+            }
+        }
 
         if (viewA == null || viewB == null) return;
 
         rootContainer.removeView(viewA);
         targetContainer.removeView(viewB);
 
+        viewB.getSettings().setTextZoom(100);
         viewB.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        viewA.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        viewA.getSettings().setTextZoom(75);
+        FrameLayout.LayoutParams pA = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        pA.topMargin = (int) (28 * getResources().getDisplayMetrics().density);
+        viewA.setLayoutParams(pA);
 
         rootContainer.addView(viewB, 0);
         targetContainer.addView(viewA, 0);
@@ -566,7 +758,7 @@ public class MainActivity extends Activity {
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private void configureWebView(WebView view, int clientSessionId) {
+    private void configureWebView(WebView view, int clientSessionId, boolean isOverlay) {
         WebSettings s = view.getSettings();
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
@@ -577,6 +769,8 @@ public class MainActivity extends Activity {
         s.setLoadWithOverviewMode(true);
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
+
+        s.setTextZoom(isOverlay ? 75 : 100);
 
         File profileDir = new File(getFilesDir(), "client_profile_" + clientSessionId);
         if (!profileDir.exists()) profileDir.mkdirs();
