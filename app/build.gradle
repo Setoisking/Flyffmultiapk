@@ -2,7 +2,7 @@ plugins {
     id 'com.android.application'
 }
 
-def buildVerCode = System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 58
+def buildVerCode = System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 59
 def buildVerName = "1.0." + buildVerCode
 
 android {
