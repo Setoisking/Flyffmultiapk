@@ -2,6 +2,10 @@ plugins {
     id 'com.android.application'
 }
 
+// Liest die GitHub Run-Nummer aus, falls vorhanden, sonst Fallback
+def buildVerCode = System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 57
+def buildVerName = "1.0." + buildVerCode
+
 android {
     namespace 'com.flyff.multiclient'
     compileSdk 34
@@ -10,8 +14,8 @@ android {
         applicationId "com.flyff.multiclient"
         minSdk 21
         targetSdk 34
-        versionCode 2
-        versionName "1.0.1"
+        versionCode buildVerCode
+        versionName buildVerName
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
