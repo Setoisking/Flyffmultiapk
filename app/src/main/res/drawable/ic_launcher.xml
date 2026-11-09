@@ -1,35 +1,27 @@
-<?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    
-    <!-- Dunkler Hintergrundkreis -->
+
+    <!-- Schwarzer Hintergrund -->
     <path
-        android:fillColor="#1A1C23"
-        android:pathData="M54,6 A48,48 0 1,0 54,102 A48,48 0 1,0 54,6 Z" />
-        
-    <!-- Äußerer goldener Ring / Neuz-Sonne -->
+        android:fillColor="#000000"
+        android:pathData="M0,0h108v108h-108z"/>
+
+    <!-- Äußerer blauer Leuchtrand -->
     <path
-        android:fillColor="#F5A623"
-        android:pathData="M54,14 A40,40 0 1,0 54,94 A40,40 0 1,0 54,14 Z" />
-        
-    <!-- Goldene Sonnenstrahlen (Flyff Neuz Emblem) -->
+        android:fillColor="#29B6F6"
+        android:pathData="M54,12 L66,38 L95,41 L73,61 L80,90 L54,75 L28,90 L35,61 L13,41 L42,38 Z"/>
+
+    <!-- Weißer Zwischenrand -->
     <path
-        android:fillColor="#F8E71C"
-        android:pathData="M54,8 L58,24 L50,24 Z M54,100 L58,84 L50,84 Z M8,54 L24,50 L24,58 Z M100,54 L84,50 L84,58 Z M21,21 L35,29 L29,35 Z M87,87 L73,79 L79,73 Z M21,87 L29,73 L35,79 Z M87,21 L79,35 L73,29 Z" />
-        
-    <!-- Innerer dunkelblauer Ring -->
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,16 L64,39 L89,42 L70,59 L76,84 L54,71 L32,84 L38,59 L19,42 L44,39 Z"/>
+
+    <!-- Gelber Kern-Stern -->
     <path
-        android:fillColor="#1B2A4A"
-        android:pathData="M54,26 A28,28 0 1,0 54,82 A28,28 0 1,0 54,26 Z" />
-        
-    <!-- Neuz-Zentrum (Heller Flyff-Kristallkern) -->
-    <path
-        android:fillColor="#4A90E2"
-        android:pathData="M54,34 L66,54 L54,74 L42,54 Z" />
-    <path
-        android:fillColor="#50E3C2"
-        android:pathData="M54,42 L60,54 L54,66 L48,54 Z" />
+        android:fillColor="#FFCA28"
+        android:pathData="M54,21 L62,40 L83,43 L67,57 L72,78 L54,67 L36,78 L41,57 L25,43 L46,40 Z"/>
+
 </vector>
