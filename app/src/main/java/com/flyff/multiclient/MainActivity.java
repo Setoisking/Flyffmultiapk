@@ -503,7 +503,6 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
-        // Punkt 4: Mini-Dock Buttons (bleiben bei Minimierung sichtbar)
         TextView miniBtnHeal = createDockButton("H", accentColor, density);
         miniBtnHeal.setVisibility(View.GONE);
         miniBtnHeal.setOnClickListener(v -> executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49));
@@ -572,7 +571,6 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnFollow);
 
-            // Punkt 2: Smart-Follow Toggle (wiederholt alle 15 Sekunden Follow)
             final boolean[] isAutoFollowActive = {false};
             TextView btnAutoFollow = createDockButton("AFol", accentColor, density);
             Runnable autoFollowTask = new Runnable() {
@@ -625,7 +623,6 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
-        // Punkt 6: Auto-Login Button
         TextView btnAutoLogin = createDockButton("Key", accentColor, density);
         btnAutoLogin.setOnClickListener(v -> promptAccountCredentialsDialog(clientUid, webView));
         topDock.addView(btnAutoLogin);
@@ -679,10 +676,36 @@ public class MainActivity extends Activity {
 
         container.addView(topDock);
 
-        // Punkt 3: HP-Alarm & Notfall-Auto-Heal Watcher Loop
         startHpWatcherLoop(webView, clientUid, floatingBadge, accentColor);
 
+        // ==========================================
+        // PUNKT 5: AKKU- & THERMAL-GUARD (AUTO-DIMMING)
+        // ==========================================
+        final Handler thermalHandler = new Handler(Looper.getMainLooper());
+        final boolean[] isDimmed = {false};
+
+        Runnable dimmingTask = () -> {
+            if (!isTransparent[0] && container.getVisibility() == View.VISIBLE) {
+                container.animate().alpha(0.45f).setDuration(400).start();
+                isDimmed[0] = true;
+            }
+        };
+
+        // Timer starten (20 Sekunden Inaktivität)
+        thermalHandler.postDelayed(dimmingTask, 20000);
+
+        Runnable resetDimmingTimer = () -> {
+            thermalHandler.removeCallbacks(dimmingTask);
+            if (isDimmed[0] && !isTransparent[0]) {
+                container.animate().alpha(1.0f).setDuration(200).start();
+                isDimmed[0] = false;
+            }
+            thermalHandler.postDelayed(dimmingTask, 20000);
+        };
+
         webView.setOnTouchListener((v, event) -> {
+            resetDimmingTimer.run();
+
             if (isRecordingMode[0] && !targetKeyToRecord[0].isEmpty() && event.getAction() == MotionEvent.ACTION_UP) {
                 float clickX = event.getX();
                 float clickY = event.getY();
@@ -732,6 +755,8 @@ public class MainActivity extends Activity {
         final boolean[] isMinimized = {false};
 
         topDock.setOnTouchListener((v, event) -> {
+            resetDimmingTimer.run();
+
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     dX[0] = container.getX() - event.getRawX();
@@ -759,7 +784,6 @@ public class MainActivity extends Activity {
                         }
                     }
 
-                    // Klick auf Badge: Minimieren / Wiederherstellen mit Floating Mini-Dock
                     if (duration < 250 && event.getX() < 40 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
@@ -768,11 +792,9 @@ public class MainActivity extends Activity {
                             webView.setVisibility(View.INVISIBLE);
                             resizeHandle.setVisibility(View.GONE);
 
-                            // Große Buttons ausblenden
                             for (int i = 3; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.GONE);
                             }
-                            // Mini-Buttons H und B einblenden
                             miniBtnHeal.setVisibility(View.VISIBLE);
                             miniBtnBuff.setVisibility(View.VISIBLE);
                             container.setBackground(null);
@@ -824,6 +846,8 @@ public class MainActivity extends Activity {
         final int[] startH = {0};
 
         resizeHandle.setOnTouchListener((v, event) -> {
+            resetDimmingTimer.run();
+
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     startX[0] = event.getRawX();
@@ -854,9 +878,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    // ==========================================
-    // AUTO-LOGIN DIALOG & INJEKTION (PUNKT 6)
-    // ==========================================
     private void promptAccountCredentialsDialog(int clientUid, WebView webView) {
         String savedUser = prefs.getString("c" + clientUid + "_login_user", "");
         String savedPass = prefs.getString("c" + clientUid + "_login_pass", "");
@@ -914,15 +935,11 @@ public class MainActivity extends Activity {
         Toast.makeText(this, "Login-Daten ausgefüllt", Toast.LENGTH_SHORT).show();
     }
 
-    // ==========================================
-    // HP-ALARM & NOTFALL AUTO-HEAL (PUNKT 3)
-    // ==========================================
     private void startHpWatcherLoop(WebView wv, int clientUid, TextView badgeView, int defaultColor) {
         Runnable r = new Runnable() {
             @Override
             public void run() {
                 if (wv != null) {
-                    // Überprüft das Flyff Universe DOM auf niedrige HP (Low-HP Warnung)
                     String checkJs = "(function() {" +
                             "  var hpBar = document.querySelector('.player-hp, .progress-bar-danger, [class*=\"hp\"]');" +
                             "  if (hpBar && hpBar.style && hpBar.style.width) {" +
@@ -941,15 +958,12 @@ public class MainActivity extends Activity {
                         }
                     });
                 }
-                loopHandler.postDelayed(this, 3000); // alle 3 Sekunden prüfen
+                loopHandler.postDelayed(this, 3000);
             }
         };
         loopHandler.postDelayed(r, 4000);
     }
 
-    // ==========================================
-    // MULTI-BUFF SEQUENZ-SETUP
-    // ==========================================
     private void promptBuffCountDialog(int clientUid, boolean[] isRecordingMode, String[] targetKeyToRecord) {
         final EditText input = new EditText(this);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
