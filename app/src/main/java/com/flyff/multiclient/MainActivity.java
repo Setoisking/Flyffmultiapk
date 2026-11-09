@@ -15,8 +15,10 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.util.Xml;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -37,18 +39,21 @@ import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
+import org.xmlpull.v1.XmlPullParser;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 public class MainActivity extends Activity {
 
@@ -59,7 +64,7 @@ public class MainActivity extends Activity {
 
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
-    private static final String CSV_FILE_NAME = "flyff_accounts.csv";
+    private static final String XLSX_FILE_NAME = "flyff_accounts.xlsx";
     private SharedPreferences prefs;
 
     public static final int ROLE_DD = 0;
@@ -101,8 +106,8 @@ public class MainActivity extends Activity {
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
 
-        // Prüft beim Start, ob die Datei existiert. Falls nicht -> automatisch anlegen
-        ensureCsvFileExists();
+        // Prüft beim allerersten Start, ob die Excel-Datei existiert; falls nicht, wird sie als Vorlage erstellt
+        ensureXlsxFileExists();
 
         WebView mainWebView = findViewById(R.id.webView1);
         configureWebView(mainWebView, 1, false);
@@ -170,57 +175,234 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // CSV DOWNLOAD-DATEI (ERSTELLEN & AUSLESEN)
+    // EXCEL (.XLSX) GENERIERUNG & AUSLESEN
     // ==========================================
-    private File getAccountsCsvFile() {
+    private File getAccountsXlsxFile() {
         File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        return new File(downloadDir, CSV_FILE_NAME);
+        if (!downloadDir.exists()) {
+            downloadDir.mkdirs();
+        }
+        return new File(downloadDir, XLSX_FILE_NAME);
     }
 
-    private void ensureCsvFileExists() {
-        File csv = getAccountsCsvFile();
-        if (!csv.exists()) {
+    private void ensureXlsxFileExists() {
+        File file = getAccountsXlsxFile();
+        if (!file.exists()) {
             try {
-                FileOutputStream fos = new FileOutputStream(csv);
-                OutputStreamWriter writer = new OutputStreamWriter(fos);
-                writer.write("session,email,password\n");
-                writer.write("1,,\n");
-                writer.write("2,,\n");
-                writer.write("3,,\n");
-                writer.write("4,,\n");
-                writer.write("5,,\n");
-                writer.write("6,,\n");
-                writer.write("7,,\n");
-                writer.write("8,,\n");
-                writer.flush();
-                writer.close();
+                FileOutputStream fos = new FileOutputStream(file);
+                ZipOutputStream zos = new ZipOutputStream(fos);
+
+                // 1. [Content_Types].xml
+                addZipEntry(zos, "[Content_Types].xml",
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n" +
+                                "  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n" +
+                                "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n" +
+                                "  <Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n" +
+                                "  <Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n" +
+                                "</Types>");
+
+                // 2. _rels/.rels
+                addZipEntry(zos, "_rels/.rels",
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n" +
+                                "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>\n" +
+                                "</Relationships>");
+
+                // 3. xl/_rels/workbook.xml.rels
+                addZipEntry(zos, "xl/_rels/workbook.xml.rels",
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n" +
+                                "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>\n" +
+                                "</Relationships>");
+
+                // 4. xl/workbook.xml
+                addZipEntry(zos, "xl/workbook.xml",
+                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
+                                "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n" +
+                                "  <sheets>\n" +
+                                "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n" +
+                                "  </sheets>\n" +
+                                "</workbook>");
+
+                // 5. xl/worksheets/sheet1.xml (Vorlage mit Session 1 bis 8 zum manuellen Ausfüllen)
+                StringBuilder sheetXml = new StringBuilder();
+                sheetXml.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
+                sheetXml.append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
+                sheetXml.append("  <sheetData>\n");
+                sheetXml.append("    <row r=\"1\">\n");
+                sheetXml.append("      <c r=\"A1\" t=\"inlineStr\"><is><t>Session</t></is></c>\n");
+                sheetXml.append("      <c r=\"B1\" t=\"inlineStr\"><is><t>Email</t></is></c>\n");
+                sheetXml.append("      <c r=\"C1\" t=\"inlineStr\"><is><t>Passwort</t></is></c>\n");
+                sheetXml.append("    </row>\n");
+                for (int i = 1; i <= 8; i++) {
+                    int rowNum = i + 1;
+                    sheetXml.append("    <row r=\"").append(rowNum).append("\">\n");
+                    sheetXml.append("      <c r=\"A").append(rowNum).append("\"><v>").append(i).append("</v></c>\n");
+                    sheetXml.append("      <c r=\"B").append(rowNum).append("\" t=\"inlineStr\"><is><t></t></is></c>\n");
+                    sheetXml.append("      <c r=\"C").append(rowNum).append("\" t=\"inlineStr\"><is><t></t></is></c>\n");
+                    sheetXml.append("    </row>\n");
+                }
+                sheetXml.append("  </sheetData>\n");
+                sheetXml.append("</worksheet>");
+
+                addZipEntry(zos, "xl/worksheets/sheet1.xml", sheetXml.toString());
+
+                zos.flush();
+                zos.close();
                 fos.close();
-                Toast.makeText(this, "Vorlage 'flyff_accounts.csv' in Downloads erstellt!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Vorlage 'flyff_accounts.xlsx' in Downloads erstellt!", Toast.LENGTH_LONG).show();
             } catch (Exception ignored) {}
         }
     }
 
-    private String[] readAccountFromCsv(int sessionId) {
-        File csv = getAccountsCsvFile();
-        if (!csv.exists()) return new String[]{"", ""};
+    private void addZipEntry(ZipOutputStream zos, String name, String content) throws Exception {
+        ZipEntry entry = new ZipEntry(name);
+        zos.putNextEntry(entry);
+        byte[] data = content.getBytes("UTF-8");
+        zos.write(data, 0, data.length);
+        zos.closeEntry();
+    }
 
+    private String[] readAccountFromXlsx(int sessionId) {
+        File file = getAccountsXlsxFile();
+        if (!file.exists()) return new String[]{"", ""};
+
+        ZipFile zip = null;
         try {
-            BufferedReader br = new BufferedReader(new InputStreamReader(new FileInputStream(csv)));
-            String line;
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split(",", -1);
-                if (parts.length >= 3) {
-                    try {
-                        int sid = Integer.parseInt(parts[0].trim());
-                        if (sid == sessionId) {
-                            br.close();
-                            return new String[]{parts[1].trim(), parts[2].trim()};
+            zip = new ZipFile(file);
+
+            // 1. Shared Strings einlesen (falls von Excel gespeichert)
+            List<String> sharedStrings = new ArrayList<>();
+            ZipEntry sstEntry = zip.getEntry("xl/sharedStrings.xml");
+            if (sstEntry != null) {
+                InputStream is = zip.getInputStream(sstEntry);
+                XmlPullParser parser = Xml.newPullParser();
+                parser.setInput(is, "UTF-8");
+                int eventType = parser.getEventType();
+                StringBuilder currentText = new StringBuilder();
+                boolean insideT = false;
+
+                while (eventType != XmlPullParser.END_DOCUMENT) {
+                    if (eventType == XmlPullParser.START_TAG) {
+                        if ("t".equalsIgnoreCase(parser.getName())) {
+                            insideT = true;
+                            currentText.setLength(0);
                         }
-                    } catch (NumberFormatException ignored) {}
+                    } else if (eventType == XmlPullParser.TEXT) {
+                        if (insideT) {
+                            currentText.append(parser.getText());
+                        }
+                    } else if (eventType == XmlPullParser.END_TAG) {
+                        if ("t".equalsIgnoreCase(parser.getName())) {
+                            insideT = false;
+                        } else if ("si".equalsIgnoreCase(parser.getName())) {
+                            sharedStrings.add(currentText.toString());
+                            currentText.setLength(0);
+                        }
+                    }
+                    eventType = parser.next();
+                }
+                is.close();
+            }
+
+            // 2. Sheet einlesen (xl/worksheets/sheet1.xml)
+            ZipEntry sheetEntry = zip.getEntry("xl/worksheets/sheet1.xml");
+            if (sheetEntry == null) {
+                Enumeration<? extends ZipEntry> entries = zip.entries();
+                while (entries.hasMoreElements()) {
+                    ZipEntry e = entries.nextElement();
+                    if (e.getName().startsWith("xl/worksheets/sheet") && e.getName().endsWith(".xml")) {
+                        sheetEntry = e;
+                        break;
+                    }
                 }
             }
-            br.close();
-        } catch (Exception ignored) {}
+
+            if (sheetEntry != null) {
+                InputStream is = zip.getInputStream(sheetEntry);
+                XmlPullParser parser = Xml.newPullParser();
+                parser.setInput(is, "UTF-8");
+
+                int eventType = parser.getEventType();
+                int currentCol = -1;
+                String cellType = "";
+                StringBuilder cellValue = new StringBuilder();
+                boolean insideValue = false;
+                boolean insideInlineText = false;
+
+                String rowSession = "";
+                String rowEmail = "";
+                String rowPass = "";
+
+                while (eventType != XmlPullParser.END_DOCUMENT) {
+                    if (eventType == XmlPullParser.START_TAG) {
+                        String tag = parser.getName();
+                        if ("row".equalsIgnoreCase(tag)) {
+                            rowSession = "";
+                            rowEmail = "";
+                            rowPass = "";
+                            currentCol = -1;
+                        } else if ("c".equalsIgnoreCase(tag)) {
+                            cellType = parser.getAttributeValue(null, "t");
+                            if (cellType == null) cellType = "";
+                            String ref = parser.getAttributeValue(null, "r");
+                            if (ref != null && !ref.isEmpty()) {
+                                char colChar = Character.toUpperCase(ref.charAt(0));
+                                currentCol = (colChar == 'A') ? 0 : (colChar == 'B' ? 1 : (colChar == 'C' ? 2 : -1));
+                            } else {
+                                currentCol++;
+                            }
+                            cellValue.setLength(0);
+                        } else if ("v".equalsIgnoreCase(tag)) {
+                            insideValue = true;
+                        } else if ("t".equalsIgnoreCase(tag)) {
+                            insideInlineText = true;
+                        }
+                    } else if (eventType == XmlPullParser.TEXT) {
+                        if (insideValue || insideInlineText) {
+                            cellValue.append(parser.getText());
+                        }
+                    } else if (eventType == XmlPullParser.END_TAG) {
+                        String tag = parser.getName();
+                        if ("v".equalsIgnoreCase(tag)) {
+                            insideValue = false;
+                        } else if ("t".equalsIgnoreCase(tag)) {
+                            insideInlineText = false;
+                        } else if ("c".equalsIgnoreCase(tag)) {
+                            String finalVal = cellValue.toString().trim();
+                            if ("s".equalsIgnoreCase(cellType)) {
+                                try {
+                                    int sIdx = Integer.parseInt(finalVal);
+                                    if (sIdx >= 0 && sIdx < sharedStrings.size()) {
+                                        finalVal = sharedStrings.get(sIdx);
+                                    }
+                                } catch (Exception ignored) {}
+                            }
+                            if (currentCol == 0) rowSession = finalVal;
+                            else if (currentCol == 1) rowEmail = finalVal;
+                            else if (currentCol == 2) rowPass = finalVal;
+                        } else if ("row".equalsIgnoreCase(tag)) {
+                            try {
+                                int sid = Integer.parseInt(rowSession.replaceAll("[^0-9]", ""));
+                                if (sid == sessionId) {
+                                    is.close();
+                                    zip.close();
+                                    return new String[]{rowEmail, rowPass};
+                                }
+                            } catch (Exception ignored) {}
+                        }
+                    }
+                    eventType = parser.next();
+                }
+                is.close();
+            }
+        } catch (Exception ignored) {
+        } finally {
+            if (zip != null) {
+                try { zip.close(); } catch (Exception ignored) {}
+            }
+        }
         return new String[]{"", ""};
     }
 
@@ -682,12 +864,12 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
-        // Auto-Login: Liest Daten aus Download/flyff_accounts.csv
+        // Auto-Login: Liest Session direkt aus Download/flyff_accounts.xlsx
         TextView btnAutoLogin = createDockButton("Key", accentColor, density);
         btnAutoLogin.setOnClickListener(v -> {
-            String[] acc = readAccountFromCsv(clientUid);
+            String[] acc = readAccountFromXlsx(clientUid);
             if (acc[0].isEmpty() && acc[1].isEmpty()) {
-                Toast.makeText(this, "Keine Zugangsdaten in Download/flyff_accounts.csv für Session " + clientUid + " gefunden!", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Keine Daten in Download/flyff_accounts.xlsx für Session " + clientUid + " gefunden!", Toast.LENGTH_LONG).show();
             } else {
                 injectCredentials(webView, acc[0], acc[1]);
             }
@@ -958,7 +1140,7 @@ public class MainActivity extends Activity {
                 "  }" +
                 "})();";
         wv.evaluateJavascript(js, null);
-        Toast.makeText(this, "Login-Daten aus CSV eingefügt", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Login-Daten aus Excel eingefügt", Toast.LENGTH_SHORT).show();
     }
 
     private void startHpWatcherLoop(WebView wv, int clientUid, TextView badgeView, int defaultColor) {
