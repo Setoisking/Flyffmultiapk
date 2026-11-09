@@ -14,7 +14,6 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
 import android.view.Gravity;
@@ -522,7 +521,8 @@ public class MainActivity extends Activity {
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        webParams.topMargin = (int) (28 * density);
+        // Höhe der Leiste angepasst (24 dp statt 28 dp)
+        webParams.topMargin = (int) (24 * density);
         webView.setLayoutParams(webParams);
         configureWebView(webView, clientNumber, true);
         webView.loadUrl("https://universe.flyff.com/play");
@@ -530,15 +530,16 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
+        // 10 % kleinere Schnellleiste (24 dp Höhe)
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
+                ViewGroup.LayoutParams.MATCH_PARENT, (int) (24 * density));
         dockParams.gravity = Gravity.TOP;
         topDock.setLayoutParams(dockParams);
         topDock.setOrientation(LinearLayout.HORIZONTAL);
         topDock.setGravity(Gravity.CENTER_VERTICAL);
         topDock.setBackgroundColor(Color.parseColor("#CC101014"));
-        topDock.setPadding((int) (4 * density), 0, (int) (4 * density), 0);
+        topDock.setPadding((int) (3 * density), 0, (int) (3 * density), 0);
 
         final String badgeText;
         if (role == ROLE_HEAL) badgeText = "RM";
@@ -550,36 +551,40 @@ public class MainActivity extends Activity {
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
 
+        // Kleineres Badge (21×21 dp)
         TextView floatingBadge = new TextView(this);
-        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (24 * density), (int) (24 * density));
+        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (21 * density), (int) (21 * density));
         floatingBadge.setLayoutParams(badgeParams);
         floatingBadge.setText(badgeText);
         floatingBadge.setTextColor(Color.WHITE);
-        floatingBadge.setTextSize(9);
+        floatingBadge.setTextSize(8);
         floatingBadge.setGravity(Gravity.CENTER);
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
-        TextView miniBtnHeal = createDockButton("H", accentColor, density);
-        miniBtnHeal.setVisibility(View.GONE);
-        miniBtnHeal.setOnClickListener(v -> executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49));
-        topDock.addView(miniBtnHeal);
+        // Mini-Dock Buttons für minimierten Zustand
+        TextView miniBtnHeal = null;
+        if (role == ROLE_HEAL) {
+            miniBtnHeal = createDockButton("H", accentColor, density, 20, 18);
+            miniBtnHeal.setVisibility(View.GONE);
+            miniBtnHeal.setOnClickListener(v -> executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49));
+            topDock.addView(miniBtnHeal);
+        }
 
-        TextView miniBtnBuff = createDockButton("B", accentColor, density);
-        miniBtnBuff.setVisibility(View.GONE);
-        miniBtnBuff.setOnClickListener(v -> executeRecordedBuffSequence(webView, clientUid));
-        topDock.addView(miniBtnBuff);
+        TextView miniBtnBuff = null;
+        if (role == ROLE_HEAL) {
+            miniBtnBuff = createDockButton("B", accentColor, density, 20, 18);
+            miniBtnBuff.setVisibility(View.GONE);
+            miniBtnBuff.setOnClickListener(v -> executeRecordedBuffSequence(webView, clientUid));
+            topDock.addView(miniBtnBuff);
+        }
 
         final boolean[] isRecordingMode = {false};
         final String[] targetKeyToRecord = {""};
 
-        TextView btnHeal = null;
-        TextView btnBuff = null;
-        TextView btnBuffFast = null;
-        TextView btnFollow = null;
-
         if (role == ROLE_HEAL) {
-            btnHeal = createDockButton("Heal", accentColor, density);
+            // RM Buttons: speziell schmaler gehalten (26×19 dp)
+            TextView btnHeal = createDockButton("Heal", accentColor, density, 26, 19);
             final TextView finalBtnHeal = btnHeal;
             btnHeal.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
@@ -592,7 +597,7 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnHeal);
 
-            btnBuff = createDockButton("Buff", accentColor, density);
+            TextView btnBuff = createDockButton("Buff", accentColor, density, 26, 19);
             btnBuff.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     promptBuffCountDialog(clientUid, isRecordingMode, targetKeyToRecord);
@@ -602,7 +607,7 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnBuff);
 
-            btnBuffFast = createDockButton("BFast", accentColor, density);
+            TextView btnBuffFast = createDockButton("BFast", accentColor, density, 28, 19);
             final TextView finalBtnFast = btnBuffFast;
             btnBuffFast.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
@@ -615,7 +620,7 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnBuffFast);
 
-            btnFollow = createDockButton("Fol", accentColor, density);
+            TextView btnFollow = createDockButton("Fol", accentColor, density, 25, 19);
             final TextView finalBtnFol = btnFollow;
             btnFollow.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
@@ -629,7 +634,7 @@ public class MainActivity extends Activity {
             topDock.addView(btnFollow);
 
             final boolean[] isAutoFollowActive = {false};
-            TextView btnAutoFollow = createDockButton("AFol", accentColor, density);
+            TextView btnAutoFollow = createDockButton("AFol", accentColor, density, 27, 19);
             Runnable autoFollowTask = new Runnable() {
                 @Override
                 public void run() {
@@ -654,7 +659,8 @@ public class MainActivity extends Activity {
             topDock.addView(btnAutoFollow);
 
         } else if (role == ROLE_LEECH) {
-            btnFollow = createDockButton("Fol", accentColor, density);
+            // LEECHER: Ausschließlich Follow & Auto-Follow (KEIN Heal, Buff oder Cheer)
+            TextView btnFollow = createDockButton("Fol", accentColor, density, 28, 19);
             final TextView finalBtnFol2 = btnFollow;
             btnFollow.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
@@ -667,20 +673,43 @@ public class MainActivity extends Activity {
             });
             topDock.addView(btnFollow);
 
-            TextView btnCheer = createDockButton("Cheer", accentColor, density);
-            btnCheer.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
-            topDock.addView(btnCheer);
+            final boolean[] isAutoFollowActive = {false};
+            TextView btnAutoFollow = createDockButton("AFol", accentColor, density, 30, 19);
+            Runnable autoFollowTask = new Runnable() {
+                @Override
+                public void run() {
+                    if (isAutoFollowActive[0]) {
+                        executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit1", 49);
+                        loopHandler.postDelayed(this, 15000);
+                    }
+                }
+            };
+            btnAutoFollow.setOnClickListener(v -> {
+                isAutoFollowActive[0] = !isAutoFollowActive[0];
+                if (isAutoFollowActive[0]) {
+                    btnAutoFollow.setTextColor(Color.GREEN);
+                    Toast.makeText(this, isDe() ? "Auto-Follow alle 15s aktiv" : "Auto-Follow active every 15s", Toast.LENGTH_SHORT).show();
+                    loopHandler.post(autoFollowTask);
+                } else {
+                    btnAutoFollow.setTextColor(Color.WHITE);
+                    loopHandler.removeCallbacks(autoFollowTask);
+                    Toast.makeText(this, isDe() ? "Auto-Follow gestoppt" : "Auto-Follow stopped", Toast.LENGTH_SHORT).show();
+                }
+            });
+            topDock.addView(btnAutoFollow);
+
         } else {
-            TextView btnAtk = createDockButton("Atk", accentColor, density);
+            TextView btnAtk = createDockButton("Atk", accentColor, density, 26, 19);
             btnAtk.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
             topDock.addView(btnAtk);
 
-            TextView btnSkill = createDockButton("Skill", accentColor, density);
+            TextView btnSkill = createDockButton("Skill", accentColor, density, 28, 19);
             btnSkill.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
             topDock.addView(btnSkill);
         }
 
-        TextView btnSettings = createDockButton("⚙", accentColor, density);
+        // 10 % kleinere Funktions-Buttons (23×19 dp)
+        TextView btnSettings = createDockButton("⚙", accentColor, density, 23, 19);
         btnSettings.setOnClickListener(v -> {
             isRecordingMode[0] = !isRecordingMode[0];
             if (isRecordingMode[0]) {
@@ -696,7 +725,7 @@ public class MainActivity extends Activity {
         topDock.addView(btnSettings);
 
         final boolean[] isTransparent = {false};
-        TextView btnGhost = createDockButton("👻", accentColor, density);
+        TextView btnGhost = createDockButton("👻", accentColor, density, 23, 19);
         btnGhost.setOnClickListener(v -> {
             if (!isTransparent[0]) {
                 container.setAlpha(0.65f);
@@ -711,7 +740,7 @@ public class MainActivity extends Activity {
         topDock.addView(btnGhost);
 
         final boolean[] isTouchLocked = {false};
-        TextView btnLock = createDockButton("🔓", accentColor, density);
+        TextView btnLock = createDockButton("🔓", accentColor, density, 23, 19);
         btnLock.setOnClickListener(v -> {
             if (!isTouchLocked[0]) {
                 webView.setOnTouchListener((view, motionEvent) -> false);
@@ -789,12 +818,12 @@ public class MainActivity extends Activity {
         });
 
         TextView resizeHandle = new TextView(this);
-        FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
+        FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (22 * density), (int) (22 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
         resizeHandle.setLayoutParams(resizeParams);
         resizeHandle.setText("⇲");
         resizeHandle.setTextColor(accentColor);
-        resizeHandle.setTextSize(14);
+        resizeHandle.setTextSize(12);
         resizeHandle.setGravity(Gravity.CENTER);
         container.addView(resizeHandle);
 
@@ -808,6 +837,9 @@ public class MainActivity extends Activity {
         final int[] savedWidth = {defaultWidth};
         final int[] savedHeight = {defaultHeight};
         final boolean[] isMinimized = {false};
+
+        final TextView finalMiniHeal = miniBtnHeal;
+        final TextView finalMiniBuff = miniBtnBuff;
 
         topDock.setOnTouchListener((v, event) -> {
             resetDimmingTimer.run();
@@ -839,7 +871,7 @@ public class MainActivity extends Activity {
                         }
                     }
 
-                    if (duration < 250 && event.getX() < 40 * density) {
+                    if (duration < 250 && event.getX() < 35 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
                             savedHeight[0] = container.getHeight();
@@ -847,16 +879,17 @@ public class MainActivity extends Activity {
                             webView.setVisibility(View.INVISIBLE);
                             resizeHandle.setVisibility(View.GONE);
 
-                            for (int i = 3; i < topDock.getChildCount(); i++) {
+                            int startIndex = (role == ROLE_HEAL) ? 3 : 1;
+                            for (int i = startIndex; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.GONE);
                             }
-                            miniBtnHeal.setVisibility(View.VISIBLE);
-                            miniBtnBuff.setVisibility(View.VISIBLE);
+                            if (finalMiniHeal != null) finalMiniHeal.setVisibility(View.VISIBLE);
+                            if (finalMiniBuff != null) finalMiniBuff.setVisibility(View.VISIBLE);
                             container.setBackground(null);
 
                             ViewGroup.LayoutParams p = container.getLayoutParams();
-                            p.width = (int) (105 * density);
-                            p.height = (int) (32 * density);
+                            p.width = (role == ROLE_HEAL) ? (int) (80 * density) : (int) (26 * density);
+                            p.height = (int) (24 * density);
                             container.setLayoutParams(p);
                             isMinimized[0] = true;
                             setClientLowSpecMode(webView, true);
@@ -864,10 +897,11 @@ public class MainActivity extends Activity {
                             webView.setVisibility(View.VISIBLE);
                             resizeHandle.setVisibility(View.VISIBLE);
 
-                            miniBtnHeal.setVisibility(View.GONE);
-                            miniBtnBuff.setVisibility(View.GONE);
+                            if (finalMiniHeal != null) finalMiniHeal.setVisibility(View.GONE);
+                            if (finalMiniBuff != null) finalMiniBuff.setVisibility(View.GONE);
 
-                            for (int i = 3; i < topDock.getChildCount(); i++) {
+                            int startIndex = (role == ROLE_HEAL) ? 3 : 1;
+                            for (int i = startIndex; i < topDock.getChildCount(); i++) {
                                 topDock.getChildAt(i).setVisibility(View.VISIBLE);
                             }
                             container.setBackground(bg);
@@ -882,7 +916,7 @@ public class MainActivity extends Activity {
                         return true;
                     }
 
-                    if (duration >= 600 && event.getX() < 40 * density) {
+                    if (duration >= 600 && event.getX() < 35 * density) {
                         swapViewsWithoutReload(overlayIndex);
                         return true;
                     }
@@ -1063,19 +1097,20 @@ public class MainActivity extends Activity {
         wv.evaluateJavascript(js, null);
     }
 
-    private TextView createDockButton(String text, int accentColor, float density) {
+    // Erstellt ca. 10 % kleinere Buttons mit anpassbarer Breite
+    private TextView createDockButton(String text, int accentColor, float density, int widthDp, int heightDp) {
         TextView btn = new TextView(this);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams((int) (34 * density), (int) (22 * density));
-        p.leftMargin = (int) (4 * density);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams((int) (widthDp * density), (int) (heightDp * density));
+        p.leftMargin = (int) (3 * density);
         btn.setLayoutParams(p);
         btn.setText(text);
         btn.setTextColor(Color.WHITE);
-        btn.setTextSize(9);
+        btn.setTextSize(8);
         btn.setGravity(Gravity.CENTER);
 
         GradientDrawable b = new GradientDrawable();
         b.setColor(Color.parseColor("#44222226"));
-        b.setCornerRadius(4 * density);
+        b.setCornerRadius(3 * density);
         b.setStroke(1, accentColor);
         btn.setBackground(b);
         return btn;
@@ -1116,7 +1151,7 @@ public class MainActivity extends Activity {
 
         FrameLayout.LayoutParams pA = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        pA.topMargin = (int) (28 * getResources().getDisplayMetrics().density);
+        pA.topMargin = (int) (24 * getResources().getDisplayMetrics().density);
         viewA.setLayoutParams(pA);
 
         rootContainer.addView(viewB, 0);
@@ -1200,20 +1235,41 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
+
+                // Zieht den tatsächlichen Flyff-Schieberegler und die Engine-Werte auf 65 %
                 String scaleJs = "(function() {" +
-                        "  function applyScale() {" +
+                        "  function force65Scale() {" +
                         "    try {" +
-                        "      localStorage.setItem('option:scale', '65');" +
-                        "      localStorage.setItem('option:uiScale', '65');" +
-                        "      if (window.Settings && window.Settings.options) {" +
-                        "        window.Settings.options.scale = 65;" +
+                        "      for (var k in localStorage) {" +
+                        "        if (k.indexOf('option') !== -1 || k.indexOf('setting') !== -1) {" +
+                        "          try {" +
+                        "            var item = JSON.parse(localStorage.getItem(k));" +
+                        "            if (item && typeof item === 'object') {" +
+                        "              if ('scale' in item) item.scale = 65;" +
+                        "              if ('uiScale' in item) item.uiScale = 0.65;" +
+                        "              localStorage.setItem(k, JSON.stringify(item));" +
+                        "            }" +
+                        "          } catch(e) {}" +
+                        "        }" +
                         "      }" +
+                        "      localStorage.setItem('option:scale', '65');" +
+                        "      localStorage.setItem('scale', '65');" +
+                        "      var sliders = document.querySelectorAll('input[type=\"range\"]');" +
+                        "      sliders.forEach(function(slider) {" +
+                        "        var row = slider.closest('tr') || slider.parentElement;" +
+                        "        if (row && (row.innerText.indexOf('Skaliert') !== -1 || row.innerText.indexOf('Scale') !== -1)) {" +
+                        "          slider.value = 65;" +
+                        "          slider.dispatchEvent(new Event('input', {bubbles: true}));" +
+                        "          slider.dispatchEvent(new Event('change', {bubbles: true}));" +
+                        "        }" +
+                        "      });" +
                         "      window.dispatchEvent(new Event('resize'));" +
-                        "    } catch(e) {}" +
+                        "    } catch(err) {}" +
                         "  }" +
-                        "  applyScale();" +
-                        "  setTimeout(applyScale, 1500);" +
-                        "  setTimeout(applyScale, 3000);" +
+                        "  force65Scale();" +
+                        "  setTimeout(force65Scale, 1500);" +
+                        "  setTimeout(force65Scale, 3000);" +
+                        "  setTimeout(force65Scale, 5500);" +
                         "})();";
                 v.evaluateJavascript(scaleJs, null);
             }
