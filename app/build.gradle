@@ -2,8 +2,7 @@ plugins {
     id 'com.android.application'
 }
 
-// Liest die GitHub Run-Nummer aus, falls vorhanden, sonst Fallback
-def buildVerCode = System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 57
+def buildVerCode = System.getenv("GITHUB_RUN_NUMBER") ? System.getenv("GITHUB_RUN_NUMBER").toInteger() : 58
 def buildVerName = "1.0." + buildVerCode
 
 android {
