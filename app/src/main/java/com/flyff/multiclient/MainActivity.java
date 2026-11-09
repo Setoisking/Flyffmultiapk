@@ -12,13 +12,11 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
-import android.util.Xml;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -30,6 +28,7 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -39,7 +38,6 @@ import androidx.core.content.FileProvider;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.xmlpull.v1.XmlPullParser;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -49,11 +47,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Enumeration;
 import java.util.List;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
-import java.util.zip.ZipOutputStream;
 
 public class MainActivity extends Activity {
 
@@ -64,8 +58,10 @@ public class MainActivity extends Activity {
 
     private int activeSwapIndex = -1;
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
-    private static final String XLSX_FILE_NAME = "flyff_accounts.xlsx";
     private SharedPreferences prefs;
+
+    // Sprache: "de" oder "en"
+    private String currentLang = "de";
 
     public static final int ROLE_DD = 0;
     public static final int ROLE_HEAL = 1;
@@ -103,18 +99,22 @@ public class MainActivity extends Activity {
         hideSystemUI();
 
         prefs = getSharedPreferences("FlyffMultiClient_Prefs", MODE_PRIVATE);
+        currentLang = prefs.getString("selected_language", "");
+
         rootContainer = findViewById(R.id.rootContainer);
         overlayLayer = findViewById(R.id.overlayLayer);
-
-        // Prüft beim allerersten Start, ob die Excel-Datei existiert; falls nicht, wird sie als Vorlage erstellt
-        ensureXlsxFileExists();
 
         WebView mainWebView = findViewById(R.id.webView1);
         configureWebView(mainWebView, 1, false);
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
-        checkForUpdates();
+        // Prüfen, ob Sprache gewählt wurde; falls nicht -> Sprach-Dialog voranstellen
+        if (currentLang.isEmpty()) {
+            promptLanguageSelection();
+        } else {
+            checkForUpdates();
+        }
     }
 
     private void hideSystemUI() {
@@ -175,235 +175,28 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // EXCEL (.XLSX) GENERIERUNG & AUSLESEN
+    // SPRACHAUSWAHL (DE / EN)
     // ==========================================
-    private File getAccountsXlsxFile() {
-        File downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        if (!downloadDir.exists()) {
-            downloadDir.mkdirs();
-        }
-        return new File(downloadDir, XLSX_FILE_NAME);
+    private void promptLanguageSelection() {
+        final String[] languages = {"Deutsch (DE)", "English (EN)"};
+
+        new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
+                .setTitle("Select Language / Sprache wählen")
+                .setCancelable(false)
+                .setItems(languages, (dialog, which) -> {
+                    if (which == 0) {
+                        currentLang = "de";
+                    } else {
+                        currentLang = "en";
+                    }
+                    prefs.edit().putString("selected_language", currentLang).apply();
+                    checkForUpdates();
+                })
+                .show();
     }
 
-    private void ensureXlsxFileExists() {
-        File file = getAccountsXlsxFile();
-        if (!file.exists()) {
-            try {
-                FileOutputStream fos = new FileOutputStream(file);
-                ZipOutputStream zos = new ZipOutputStream(fos);
-
-                // 1. [Content_Types].xml
-                addZipEntry(zos, "[Content_Types].xml",
-                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-                                "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n" +
-                                "  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n" +
-                                "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n" +
-                                "  <Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>\n" +
-                                "  <Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>\n" +
-                                "</Types>");
-
-                // 2. _rels/.rels
-                addZipEntry(zos, "_rels/.rels",
-                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-                                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n" +
-                                "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>\n" +
-                                "</Relationships>");
-
-                // 3. xl/_rels/workbook.xml.rels
-                addZipEntry(zos, "xl/_rels/workbook.xml.rels",
-                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-                                "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n" +
-                                "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>\n" +
-                                "</Relationships>");
-
-                // 4. xl/workbook.xml
-                addZipEntry(zos, "xl/workbook.xml",
-                        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n" +
-                                "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">\n" +
-                                "  <sheets>\n" +
-                                "    <sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>\n" +
-                                "  </sheets>\n" +
-                                "</workbook>");
-
-                // 5. xl/worksheets/sheet1.xml (Vorlage mit Session 1 bis 8 zum manuellen Ausfüllen)
-                StringBuilder sheetXml = new StringBuilder();
-                sheetXml.append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n");
-                sheetXml.append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n");
-                sheetXml.append("  <sheetData>\n");
-                sheetXml.append("    <row r=\"1\">\n");
-                sheetXml.append("      <c r=\"A1\" t=\"inlineStr\"><is><t>Session</t></is></c>\n");
-                sheetXml.append("      <c r=\"B1\" t=\"inlineStr\"><is><t>Email</t></is></c>\n");
-                sheetXml.append("      <c r=\"C1\" t=\"inlineStr\"><is><t>Passwort</t></is></c>\n");
-                sheetXml.append("    </row>\n");
-                for (int i = 1; i <= 8; i++) {
-                    int rowNum = i + 1;
-                    sheetXml.append("    <row r=\"").append(rowNum).append("\">\n");
-                    sheetXml.append("      <c r=\"A").append(rowNum).append("\"><v>").append(i).append("</v></c>\n");
-                    sheetXml.append("      <c r=\"B").append(rowNum).append("\" t=\"inlineStr\"><is><t></t></is></c>\n");
-                    sheetXml.append("      <c r=\"C").append(rowNum).append("\" t=\"inlineStr\"><is><t></t></is></c>\n");
-                    sheetXml.append("    </row>\n");
-                }
-                sheetXml.append("  </sheetData>\n");
-                sheetXml.append("</worksheet>");
-
-                addZipEntry(zos, "xl/worksheets/sheet1.xml", sheetXml.toString());
-
-                zos.flush();
-                zos.close();
-                fos.close();
-                Toast.makeText(this, "Vorlage 'flyff_accounts.xlsx' in Downloads erstellt!", Toast.LENGTH_LONG).show();
-            } catch (Exception ignored) {}
-        }
-    }
-
-    private void addZipEntry(ZipOutputStream zos, String name, String content) throws Exception {
-        ZipEntry entry = new ZipEntry(name);
-        zos.putNextEntry(entry);
-        byte[] data = content.getBytes("UTF-8");
-        zos.write(data, 0, data.length);
-        zos.closeEntry();
-    }
-
-    private String[] readAccountFromXlsx(int sessionId) {
-        File file = getAccountsXlsxFile();
-        if (!file.exists()) return new String[]{"", ""};
-
-        ZipFile zip = null;
-        try {
-            zip = new ZipFile(file);
-
-            // 1. Shared Strings einlesen (falls von Excel gespeichert)
-            List<String> sharedStrings = new ArrayList<>();
-            ZipEntry sstEntry = zip.getEntry("xl/sharedStrings.xml");
-            if (sstEntry != null) {
-                InputStream is = zip.getInputStream(sstEntry);
-                XmlPullParser parser = Xml.newPullParser();
-                parser.setInput(is, "UTF-8");
-                int eventType = parser.getEventType();
-                StringBuilder currentText = new StringBuilder();
-                boolean insideT = false;
-
-                while (eventType != XmlPullParser.END_DOCUMENT) {
-                    if (eventType == XmlPullParser.START_TAG) {
-                        if ("t".equalsIgnoreCase(parser.getName())) {
-                            insideT = true;
-                            currentText.setLength(0);
-                        }
-                    } else if (eventType == XmlPullParser.TEXT) {
-                        if (insideT) {
-                            currentText.append(parser.getText());
-                        }
-                    } else if (eventType == XmlPullParser.END_TAG) {
-                        if ("t".equalsIgnoreCase(parser.getName())) {
-                            insideT = false;
-                        } else if ("si".equalsIgnoreCase(parser.getName())) {
-                            sharedStrings.add(currentText.toString());
-                            currentText.setLength(0);
-                        }
-                    }
-                    eventType = parser.next();
-                }
-                is.close();
-            }
-
-            // 2. Sheet einlesen (xl/worksheets/sheet1.xml)
-            ZipEntry sheetEntry = zip.getEntry("xl/worksheets/sheet1.xml");
-            if (sheetEntry == null) {
-                Enumeration<? extends ZipEntry> entries = zip.entries();
-                while (entries.hasMoreElements()) {
-                    ZipEntry e = entries.nextElement();
-                    if (e.getName().startsWith("xl/worksheets/sheet") && e.getName().endsWith(".xml")) {
-                        sheetEntry = e;
-                        break;
-                    }
-                }
-            }
-
-            if (sheetEntry != null) {
-                InputStream is = zip.getInputStream(sheetEntry);
-                XmlPullParser parser = Xml.newPullParser();
-                parser.setInput(is, "UTF-8");
-
-                int eventType = parser.getEventType();
-                int currentCol = -1;
-                String cellType = "";
-                StringBuilder cellValue = new StringBuilder();
-                boolean insideValue = false;
-                boolean insideInlineText = false;
-
-                String rowSession = "";
-                String rowEmail = "";
-                String rowPass = "";
-
-                while (eventType != XmlPullParser.END_DOCUMENT) {
-                    if (eventType == XmlPullParser.START_TAG) {
-                        String tag = parser.getName();
-                        if ("row".equalsIgnoreCase(tag)) {
-                            rowSession = "";
-                            rowEmail = "";
-                            rowPass = "";
-                            currentCol = -1;
-                        } else if ("c".equalsIgnoreCase(tag)) {
-                            cellType = parser.getAttributeValue(null, "t");
-                            if (cellType == null) cellType = "";
-                            String ref = parser.getAttributeValue(null, "r");
-                            if (ref != null && !ref.isEmpty()) {
-                                char colChar = Character.toUpperCase(ref.charAt(0));
-                                currentCol = (colChar == 'A') ? 0 : (colChar == 'B' ? 1 : (colChar == 'C' ? 2 : -1));
-                            } else {
-                                currentCol++;
-                            }
-                            cellValue.setLength(0);
-                        } else if ("v".equalsIgnoreCase(tag)) {
-                            insideValue = true;
-                        } else if ("t".equalsIgnoreCase(tag)) {
-                            insideInlineText = true;
-                        }
-                    } else if (eventType == XmlPullParser.TEXT) {
-                        if (insideValue || insideInlineText) {
-                            cellValue.append(parser.getText());
-                        }
-                    } else if (eventType == XmlPullParser.END_TAG) {
-                        String tag = parser.getName();
-                        if ("v".equalsIgnoreCase(tag)) {
-                            insideValue = false;
-                        } else if ("t".equalsIgnoreCase(tag)) {
-                            insideInlineText = false;
-                        } else if ("c".equalsIgnoreCase(tag)) {
-                            String finalVal = cellValue.toString().trim();
-                            if ("s".equalsIgnoreCase(cellType)) {
-                                try {
-                                    int sIdx = Integer.parseInt(finalVal);
-                                    if (sIdx >= 0 && sIdx < sharedStrings.size()) {
-                                        finalVal = sharedStrings.get(sIdx);
-                                    }
-                                } catch (Exception ignored) {}
-                            }
-                            if (currentCol == 0) rowSession = finalVal;
-                            else if (currentCol == 1) rowEmail = finalVal;
-                            else if (currentCol == 2) rowPass = finalVal;
-                        } else if ("row".equalsIgnoreCase(tag)) {
-                            try {
-                                int sid = Integer.parseInt(rowSession.replaceAll("[^0-9]", ""));
-                                if (sid == sessionId) {
-                                    is.close();
-                                    zip.close();
-                                    return new String[]{rowEmail, rowPass};
-                                }
-                            } catch (Exception ignored) {}
-                        }
-                    }
-                    eventType = parser.next();
-                }
-                is.close();
-            }
-        } catch (Exception ignored) {
-        } finally {
-            if (zip != null) {
-                try { zip.close(); } catch (Exception ignored) {}
-            }
-        }
-        return new String[]{"", ""};
+    private boolean isDe() {
+        return "de".equalsIgnoreCase(currentLang);
     }
 
     // ==========================================
@@ -490,19 +283,29 @@ public class MainActivity extends Activity {
     }
 
     private void showUpdateDialog(String currentVer, String newVer, String downloadUrl) {
+        String title = isDe() ? "Neues Update verfügbar!" : "New update available!";
+        String msg = isDe()
+                ? ("Installiert: v" + currentVer + "\nNeueste Version: v" + newVer + "\n\nJetzt aktualisieren?")
+                : ("Installed: v" + currentVer + "\nLatest version: v" + newVer + "\n\nUpdate now?");
+        String btnUpdate = isDe() ? "Aktualisieren" : "Update";
+        String btnLater = isDe() ? "Später" : "Later";
+
         new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("Neues Update verfügbar!")
-                .setMessage("Installiert: v" + currentVer + "\nNeueste Version: v" + newVer + "\n\nJetzt aktualisieren?")
+                .setTitle(title)
+                .setMessage(msg)
                 .setCancelable(false)
-                .setPositiveButton("Aktualisieren", (dialog, which) -> downloadAndInstallApk(downloadUrl))
-                .setNegativeButton("Später", (dialog, which) -> checkSavedSessionSetup())
+                .setPositiveButton(btnUpdate, (dialog, which) -> downloadAndInstallApk(downloadUrl))
+                .setNegativeButton(btnLater, (dialog, which) -> checkSavedSessionSetup())
                 .show();
     }
 
     private void downloadAndInstallApk(String fileUrl) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!getPackageManager().canRequestPackageInstalls()) {
-                Toast.makeText(this, "Bitte 'Unbekannte Apps installieren' erlauben und erneut tippen", Toast.LENGTH_LONG).show();
+                String reqMsg = isDe()
+                        ? "Bitte 'Unbekannte Apps installieren' erlauben und erneut tippen"
+                        : "Please allow 'Install unknown apps' and tap again";
+                Toast.makeText(this, reqMsg, Toast.LENGTH_LONG).show();
                 Intent settingsIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES);
                 settingsIntent.setData(Uri.parse("package:" + getPackageName()));
                 startActivity(settingsIntent);
@@ -510,7 +313,8 @@ public class MainActivity extends Activity {
             }
         }
 
-        Toast.makeText(this, "Lade Update herunter... Bitte kurz warten", Toast.LENGTH_SHORT).show();
+        String dlMsg = isDe() ? "Lade Update herunter... Bitte warten" : "Downloading update... Please wait";
+        Toast.makeText(this, dlMsg, Toast.LENGTH_SHORT).show();
 
         new Thread(() -> {
             try {
@@ -563,12 +367,13 @@ public class MainActivity extends Activity {
                 if (totalBytes > 100000) {
                     new Handler(Looper.getMainLooper()).post(() -> installApk(outputFile));
                 } else {
-                    throw new Exception("Heruntergeladene Datei ist unvollständig.");
+                    throw new Exception("Incomplete download");
                 }
 
             } catch (Exception e) {
                 new Handler(Looper.getMainLooper()).post(() -> {
-                    Toast.makeText(this, "Download fehlgeschlagen, öffne Browser...", Toast.LENGTH_SHORT).show();
+                    String failMsg = isDe() ? "Download fehlgeschlagen, öffne Browser..." : "Download failed, opening browser...";
+                    Toast.makeText(this, failMsg, Toast.LENGTH_SHORT).show();
                     Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(fileUrl));
                     startActivity(browserIntent);
                     checkSavedSessionSetup();
@@ -585,7 +390,7 @@ public class MainActivity extends Activity {
             installIntent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_GRANT_READ_URI_PERMISSION);
             startActivity(installIntent);
         } catch (Exception e) {
-            Toast.makeText(this, "Installer-Fehler: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "Installer error: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             checkSavedSessionSetup();
         }
     }
@@ -598,21 +403,34 @@ public class MainActivity extends Activity {
         if (hasSaved) {
             totalSavedSessions = prefs.getInt("saved_total_sessions", 1);
             StringBuilder sb = new StringBuilder();
-            sb.append("Gespeichertes Setup (").append(totalSavedSessions).append(" Sessions):\n");
+
+            if (isDe()) {
+                sb.append("Gespeichertes Setup (").append(totalSavedSessions).append(" Sessions):\n");
+            } else {
+                sb.append("Saved setup (").append(totalSavedSessions).append(" sessions):\n");
+            }
+
             for (int i = 0; i < totalSavedSessions; i++) {
                 int r = prefs.getInt("role_session_" + i, ROLE_DD);
                 sessionRoles[i] = r;
-                String rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
-                sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
+                String rName;
+                if (isDe()) {
+                    rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
+                    sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
+                } else {
+                    rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
+                    sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
+                }
             }
-            sb.append("\nMöchtest du dieses Setup erneut übernehmen?");
+
+            sb.append("\n").append(isDe() ? "Möchtest du dieses Setup erneut übernehmen?" : "Would you like to load this setup again?");
 
             new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                    .setTitle("Setup übernehmen?")
+                    .setTitle(isDe() ? "Setup übernehmen?" : "Load setup?")
                     .setMessage(sb.toString())
                     .setCancelable(false)
-                    .setPositiveButton("Ja, übernehmen", (dialog, which) -> launchSessions(totalSavedSessions))
-                    .setNegativeButton("Neu einrichten", (dialog, which) -> promptSessionCount())
+                    .setPositiveButton(isDe() ? "Ja, übernehmen" : "Yes, load", (dialog, which) -> launchSessions(totalSavedSessions))
+                    .setNegativeButton(isDe() ? "Neu einrichten" : "Configure new", (dialog, which) -> promptSessionCount())
                     .show();
         } else {
             promptSessionCount();
@@ -620,13 +438,21 @@ public class MainActivity extends Activity {
     }
 
     private void promptSessionCount() {
-        final String[] options = {
-                "1 Session (Vollbild)", "2 Sessions", "3 Sessions", "4 Sessions",
-                "5 Sessions", "6 Sessions", "7 Sessions", "8 Sessions"
-        };
+        final String[] options;
+        if (isDe()) {
+            options = new String[]{
+                    "1 Session (Vollbild)", "2 Sessions", "3 Sessions", "4 Sessions",
+                    "5 Sessions", "6 Sessions", "7 Sessions", "8 Sessions"
+            };
+        } else {
+            options = new String[]{
+                    "1 Session (Fullscreen)", "2 Sessions", "3 Sessions", "4 Sessions",
+                    "5 Sessions", "6 Sessions", "7 Sessions", "8 Sessions"
+            };
+        }
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
-        builder.setTitle("Wie viele Sessions starten?")
+        builder.setTitle(isDe() ? "Wie viele Sessions starten?" : "How many sessions to launch?")
                 .setCancelable(false)
                 .setItems(options, (dialog, which) -> {
                     totalSavedSessions = which + 1;
@@ -642,11 +468,26 @@ public class MainActivity extends Activity {
     }
 
     private void promptSessionRole(final int currentSessionIndex, final int totalSessions) {
-        final String[] roles = {"Main (DD)", "Heal (RM / Support)", "Leech"};
-        String sessionName = (currentSessionIndex == 0) ? "Hauptfenster (Vollbild)" : "Overlay " + (currentSessionIndex + 1);
+        final String[] roles;
+        if (isDe()) {
+            roles = new String[]{"Main (DD)", "Heal (RM / Support)", "Leech"};
+        } else {
+            roles = new String[]{"Main (DD)", "Heal (RM / Support)", "Leech"};
+        }
+
+        String sessionName;
+        if (isDe()) {
+            sessionName = (currentSessionIndex == 0) ? "Hauptfenster (Vollbild)" : "Overlay " + (currentSessionIndex + 1);
+        } else {
+            sessionName = (currentSessionIndex == 0) ? "Main Window (Fullscreen)" : "Overlay " + (currentSessionIndex + 1);
+        }
+
+        String title = isDe()
+                ? ("Rolle für Session " + (currentSessionIndex + 1) + " (" + sessionName + ")")
+                : ("Role for Session " + (currentSessionIndex + 1) + " (" + sessionName + ")");
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK);
-        builder.setTitle("Rolle für Session " + (currentSessionIndex + 1) + " (" + sessionName + ")")
+        builder.setTitle(title)
                 .setCancelable(false)
                 .setItems(roles, (dialog, which) -> {
                     sessionRoles[currentSessionIndex] = which;
@@ -768,7 +609,7 @@ public class MainActivity extends Activity {
             btnHeal.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     targetKeyToRecord[0] = "heal";
-                    Toast.makeText(this, "Tippe jetzt auf das HEAL-Icon!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Tippe jetzt auf das HEAL-Icon!" : "Tap the HEAL icon now!", Toast.LENGTH_SHORT).show();
                     finalBtnHeal.setTextColor(Color.YELLOW);
                 } else {
                     executeRecordedTap(webView, "c" + clientUid + "_heal", "Digit1", 49);
@@ -791,7 +632,7 @@ public class MainActivity extends Activity {
             btnBuffFast.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     targetKeyToRecord[0] = "bfast";
-                    Toast.makeText(this, "Tippe jetzt auf das Fast-Buff/Skill-Icon!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Tippe jetzt auf das Fast-Buff/Skill-Icon!" : "Tap the Fast-Buff/Skill icon now!", Toast.LENGTH_SHORT).show();
                     finalBtnFast.setTextColor(Color.YELLOW);
                 } else {
                     executeRecordedTap(webView, "c" + clientUid + "_bfast", "Digit4", 52);
@@ -804,7 +645,7 @@ public class MainActivity extends Activity {
             btnFollow.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     targetKeyToRecord[0] = "follow";
-                    Toast.makeText(this, "Tippe jetzt auf das FOLLOW-Icon!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Tippe jetzt auf das FOLLOW-Icon!" : "Tap the FOLLOW icon now!", Toast.LENGTH_SHORT).show();
                     finalBtnFol.setTextColor(Color.YELLOW);
                 } else {
                     executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit3", 51);
@@ -827,12 +668,12 @@ public class MainActivity extends Activity {
                 isAutoFollowActive[0] = !isAutoFollowActive[0];
                 if (isAutoFollowActive[0]) {
                     btnAutoFollow.setTextColor(Color.GREEN);
-                    Toast.makeText(this, "Auto-Follow alle 15s aktiv", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Auto-Follow alle 15s aktiv" : "Auto-Follow active every 15s", Toast.LENGTH_SHORT).show();
                     loopHandler.post(autoFollowTask);
                 } else {
                     btnAutoFollow.setTextColor(Color.WHITE);
                     loopHandler.removeCallbacks(autoFollowTask);
-                    Toast.makeText(this, "Auto-Follow gestoppt", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Auto-Follow gestoppt" : "Auto-Follow stopped", Toast.LENGTH_SHORT).show();
                 }
             });
             topDock.addView(btnAutoFollow);
@@ -843,7 +684,7 @@ public class MainActivity extends Activity {
             btnFollow.setOnClickListener(v -> {
                 if (isRecordingMode[0]) {
                     targetKeyToRecord[0] = "follow";
-                    Toast.makeText(this, "Tippe jetzt auf das FOLLOW-Icon!", Toast.LENGTH_SHORT).show();
+                    Toast.makeText(this, isDe() ? "Tippe jetzt auf das FOLLOW-Icon!" : "Tap the FOLLOW icon now!", Toast.LENGTH_SHORT).show();
                     finalBtnFol2.setTextColor(Color.YELLOW);
                 } else {
                     executeRecordedTap(webView, "c" + clientUid + "_follow", "Digit1", 49);
@@ -864,28 +705,17 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
-        // Auto-Login: Liest Session direkt aus Download/flyff_accounts.xlsx
-        TextView btnAutoLogin = createDockButton("Key", accentColor, density);
-        btnAutoLogin.setOnClickListener(v -> {
-            String[] acc = readAccountFromXlsx(clientUid);
-            if (acc[0].isEmpty() && acc[1].isEmpty()) {
-                Toast.makeText(this, "Keine Daten in Download/flyff_accounts.xlsx für Session " + clientUid + " gefunden!", Toast.LENGTH_LONG).show();
-            } else {
-                injectCredentials(webView, acc[0], acc[1]);
-            }
-        });
-        topDock.addView(btnAutoLogin);
-
         TextView btnSettings = createDockButton("⚙", accentColor, density);
         btnSettings.setOnClickListener(v -> {
             isRecordingMode[0] = !isRecordingMode[0];
             if (isRecordingMode[0]) {
                 btnSettings.setTextColor(Color.RED);
-                Toast.makeText(this, "AUFNAHME-MODUS AKTIV: Button wählen und auf Skill tippen!", Toast.LENGTH_LONG).show();
+                String msg = isDe() ? "AUFNAHME-MODUS AKTIV: Button wählen und auf Skill tippen!" : "RECORDING ACTIVE: Select button and tap skill icon!";
+                Toast.makeText(this, msg, Toast.LENGTH_LONG).show();
             } else {
                 btnSettings.setTextColor(Color.WHITE);
                 targetKeyToRecord[0] = "";
-                Toast.makeText(this, "Aufnahme-Modus beendet.", Toast.LENGTH_SHORT).show();
+                Toast.makeText(this, isDe() ? "Aufnahme-Modus beendet." : "Recording mode stopped.", Toast.LENGTH_SHORT).show();
             }
         });
         topDock.addView(btnSettings);
@@ -913,7 +743,8 @@ public class MainActivity extends Activity {
                 isTouchLocked[0] = true;
                 btnLock.setText("🔒");
                 btnLock.setTextColor(Color.RED);
-                Toast.makeText(this, badgeText + ": Ghost-Touch aktiv", Toast.LENGTH_SHORT).show();
+                String msg = isDe() ? ": Ghost-Touch aktiv" : ": Ghost-Touch active";
+                Toast.makeText(this, badgeText + msg, Toast.LENGTH_SHORT).show();
             } else {
                 webView.setOnTouchListener(null);
                 isTouchLocked[0] = false;
@@ -965,12 +796,16 @@ public class MainActivity extends Activity {
                     if (targetKeyToRecord[0].startsWith("buff_step_")) {
                         prefs.edit().putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_x", relX)
                                 .putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_y", relY).apply();
-                        Toast.makeText(this, "Gespeichert: " + targetKeyToRecord[0], Toast.LENGTH_SHORT).show();
+                        String savedMsg = isDe() ? "Gespeichert: " : "Saved: ";
+                        Toast.makeText(this, savedMsg + targetKeyToRecord[0], Toast.LENGTH_SHORT).show();
                         advanceBuffRecording(clientUid, targetKeyToRecord, isRecordingMode);
                     } else {
                         prefs.edit().putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_x", relX)
                                 .putFloat("c" + clientUid + "_" + targetKeyToRecord[0] + "_y", relY).apply();
-                        Toast.makeText(this, "Position für " + targetKeyToRecord[0].toUpperCase() + " gespeichert!", Toast.LENGTH_SHORT).show();
+                        String savedPosMsg = isDe()
+                                ? ("Position für " + targetKeyToRecord[0].toUpperCase() + " gespeichert!")
+                                : ("Position for " + targetKeyToRecord[0].toUpperCase() + " saved!");
+                        Toast.makeText(this, savedPosMsg, Toast.LENGTH_SHORT).show();
                         targetKeyToRecord[0] = "";
                     }
                 }
@@ -1124,25 +959,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void injectCredentials(WebView wv, String user, String pass) {
-        if (wv == null) return;
-        String js = "(function() {" +
-                "  var inputs = document.querySelectorAll('input');" +
-                "  for(var i=0; i<inputs.length; i++) {" +
-                "    var type = inputs[i].getAttribute('type') || '';" +
-                "    if(type.toLowerCase() === 'password') {" +
-                "      inputs[i].value = '" + pass + "';" +
-                "      inputs[i].dispatchEvent(new Event('input', {bubbles: true}));" +
-                "    } else if(type.toLowerCase() === 'email' || type.toLowerCase() === 'text') {" +
-                "      inputs[i].value = '" + user + "';" +
-                "      inputs[i].dispatchEvent(new Event('input', {bubbles: true}));" +
-                "    }" +
-                "  }" +
-                "})();";
-        wv.evaluateJavascript(js, null);
-        Toast.makeText(this, "Login-Daten aus Excel eingefügt", Toast.LENGTH_SHORT).show();
-    }
-
     private void startHpWatcherLoop(WebView wv, int clientUid, TextView badgeView, int defaultColor) {
         Runnable r = new Runnable() {
             @Override
@@ -1173,15 +989,22 @@ public class MainActivity extends Activity {
     }
 
     private void promptBuffCountDialog(int clientUid, boolean[] isRecordingMode, String[] targetKeyToRecord) {
-        final android.widget.EditText input = new android.widget.EditText(this);
+        final EditText input = new EditText(this);
         input.setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-        input.setHint("Anzahl (1 bis 15)");
+        input.setHint(isDe() ? "Anzahl (1 bis 15)" : "Count (1 to 15)");
+
+        String title = isDe() ? "Buff-Sequenz aufnehmen" : "Record buff sequence";
+        String msg = isDe()
+                ? "Wie viele Buffs möchtest du hintereinander ausführen? (1 - 15):"
+                : "How many buffs do you want to chain? (1 - 15):";
+        String btnStart = isDe() ? "Starten" : "Start";
+        String btnCancel = isDe() ? "Abbrechen" : "Cancel";
 
         new AlertDialog.Builder(this, AlertDialog.THEME_DEVICE_DEFAULT_DARK)
-                .setTitle("Buff-Sequenz aufnehmen")
-                .setMessage("Wie viele Buffs möchtest du hintereinander ausführen? (1 - 15):")
+                .setTitle(title)
+                .setMessage(msg)
                 .setView(input)
-                .setPositiveButton("Starten", (dialog, which) -> {
+                .setPositiveButton(btnStart, (dialog, which) -> {
                     int count = 1;
                     try {
                         count = Integer.parseInt(input.getText().toString());
@@ -1191,9 +1014,11 @@ public class MainActivity extends Activity {
 
                     prefs.edit().putInt("c" + clientUid + "_buff_count", count).apply();
                     targetKeyToRecord[0] = "buff_step_1";
-                    Toast.makeText(this, "Tippe jetzt Buff 1 von " + count + " an!", Toast.LENGTH_SHORT).show();
+
+                    String tapMsg = isDe() ? ("Tippe jetzt Buff 1 von " + count + " an!") : ("Tap Buff 1 of " + count + " now!");
+                    Toast.makeText(this, tapMsg, Toast.LENGTH_SHORT).show();
                 })
-                .setNegativeButton("Abbrechen", null)
+                .setNegativeButton(btnCancel, null)
                 .show();
     }
 
@@ -1203,9 +1028,13 @@ public class MainActivity extends Activity {
             int currentStep = Integer.parseInt(targetKeyToRecord[0].replace("buff_step_", ""));
             if (currentStep < total) {
                 targetKeyToRecord[0] = "buff_step_" + (currentStep + 1);
-                Toast.makeText(this, "Tippe jetzt Buff " + (currentStep + 1) + " von " + total + " an!", Toast.LENGTH_SHORT).show();
+                String stepMsg = isDe()
+                        ? ("Tippe jetzt Buff " + (currentStep + 1) + " von " + total + " an!")
+                        : ("Tap Buff " + (currentStep + 1) + " of " + total + " now!");
+                Toast.makeText(this, stepMsg, Toast.LENGTH_SHORT).show();
             } else {
-                Toast.makeText(this, "Alle " + total + " Buffs gespeichert!", Toast.LENGTH_LONG).show();
+                String finishedMsg = isDe() ? ("Alle " + total + " Buffs gespeichert!") : ("All " + total + " buffs saved!");
+                Toast.makeText(this, finishedMsg, Toast.LENGTH_LONG).show();
                 targetKeyToRecord[0] = "";
                 isRecordingMode[0] = false;
             }
@@ -1229,7 +1058,8 @@ public class MainActivity extends Activity {
             return;
         }
 
-        Toast.makeText(this, "Buffe " + total + " Skills...", Toast.LENGTH_SHORT).show();
+        String buffingMsg = isDe() ? ("Buffe " + total + " Skills...") : ("Buffing " + total + " skills...");
+        Toast.makeText(this, buffingMsg, Toast.LENGTH_SHORT).show();
         Handler h = new Handler(Looper.getMainLooper());
         for (int i = 1; i <= total; i++) {
             final int step = i;
@@ -1325,10 +1155,10 @@ public class MainActivity extends Activity {
 
         if (activeSwapIndex == targetOverlayIndex) {
             activeSwapIndex = -1;
-            Toast.makeText(this, "Zurückgetauscht", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isDe() ? "Zurückgetauscht" : "Swapped back", Toast.LENGTH_SHORT).show();
         } else {
             activeSwapIndex = targetOverlayIndex;
-            Toast.makeText(this, "Ansicht gewechselt (ohne Reload)", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, isDe() ? "Ansicht gewechselt (ohne Reload)" : "View swapped (without reload)", Toast.LENGTH_SHORT).show();
         }
     }
 
