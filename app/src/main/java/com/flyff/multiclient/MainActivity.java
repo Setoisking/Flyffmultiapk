@@ -60,7 +60,6 @@ public class MainActivity extends Activity {
     private static final String GITHUB_REPO = "Setoisking/Flyffmultiapk";
     private SharedPreferences prefs;
 
-    // Sprache: "de" oder "en"
     private String currentLang = "de";
 
     public static final int ROLE_DD = 0;
@@ -109,7 +108,6 @@ public class MainActivity extends Activity {
         mainWebView.loadUrl("https://universe.flyff.com/play");
         activeWebViews.add(mainWebView);
 
-        // Prüfen, ob Sprache gewählt wurde; falls nicht -> Sprach-Dialog voranstellen
         if (currentLang.isEmpty()) {
             promptLanguageSelection();
         } else {
@@ -174,9 +172,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // SPRACHAUSWAHL (DE / EN)
-    // ==========================================
     private void promptLanguageSelection() {
         final String[] languages = {"Deutsch (DE)", "English (EN)"};
 
@@ -199,9 +194,6 @@ public class MainActivity extends Activity {
         return "de".equalsIgnoreCase(currentLang);
     }
 
-    // ==========================================
-    // UPDATE CHECKER (GitHub API)
-    // ==========================================
     private void checkForUpdates() {
         new Thread(() -> {
             try {
@@ -395,9 +387,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // GESPEICHERTES SETUP LADEN ODER NEU WÄHLEN
-    // ==========================================
     private void checkSavedSessionSetup() {
         boolean hasSaved = prefs.getBoolean("has_saved_setup", false);
         if (hasSaved) {
@@ -413,14 +402,8 @@ public class MainActivity extends Activity {
             for (int i = 0; i < totalSavedSessions; i++) {
                 int r = prefs.getInt("role_session_" + i, ROLE_DD);
                 sessionRoles[i] = r;
-                String rName;
-                if (isDe()) {
-                    rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
-                    sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
-                } else {
-                    rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
-                    sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
-                }
+                String rName = (r == ROLE_HEAL) ? "Heal (RM)" : (r == ROLE_LEECH ? "Leech" : "Main (DD)");
+                sb.append("• Session ").append(i + 1).append(": ").append(rName).append("\n");
             }
 
             sb.append("\n").append(isDe() ? "Möchtest du dieses Setup erneut übernehmen?" : "Would you like to load this setup again?");
@@ -468,12 +451,7 @@ public class MainActivity extends Activity {
     }
 
     private void promptSessionRole(final int currentSessionIndex, final int totalSessions) {
-        final String[] roles;
-        if (isDe()) {
-            roles = new String[]{"Main (DD)", "Heal (RM / Support)", "Leech"};
-        } else {
-            roles = new String[]{"Main (DD)", "Heal (RM / Support)", "Leech"};
-        }
+        final String[] roles = {"Main (DD)", "Heal (RM / Support)", "Leech"};
 
         String sessionName;
         if (isDe()) {
@@ -520,9 +498,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // MULTI-SESSION OVERLAYS & BEDIENUNG
-    // ==========================================
     @SuppressLint("ClickableViewAccessibility")
     private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
         float density = getResources().getDisplayMetrics().density;
@@ -1137,11 +1112,9 @@ public class MainActivity extends Activity {
         rootContainer.removeView(viewA);
         targetContainer.removeView(viewB);
 
-        viewB.getSettings().setTextZoom(100);
         viewB.setLayoutParams(new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        viewA.getSettings().setTextZoom(75);
         FrameLayout.LayoutParams pA = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         pA.topMargin = (int) (28 * getResources().getDisplayMetrics().density);
@@ -1203,7 +1176,12 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
 
-        s.setTextZoom(isOverlay ? 75 : 100);
+        s.setSaveFormData(false);
+        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.O) {
+            s.setSavePassword(false);
+        }
+
+        s.setTextZoom(100);
 
         File profileDir = new File(getFilesDir(), "client_profile_" + clientSessionId);
         if (!profileDir.exists()) profileDir.mkdirs();
@@ -1218,6 +1196,23 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest req) {
                 return false;
+            }
+
+            @Override
+            public void onPageFinished(WebView v, String url) {
+                super.onPageFinished(v, url);
+                // Setzt UI-Scale in den Flyff Universe Spieleinstellungen direkt auf 65 % (0.65)
+                String scaleJs = "(function() {" +
+                        "  try {" +
+                        "    var raw = localStorage.getItem('settings') || '{}';" +
+                        "    var s = JSON.parse(raw);" +
+                        "    s.uiScale = 0.65;" +
+                        "    s.scale = 0.65;" +
+                        "    localStorage.setItem('settings', JSON.stringify(s));" +
+                        "    window.dispatchEvent(new Event('resize'));" +
+                        "  } catch(e) {}" +
+                        "})();";
+                v.evaluateJavascript(scaleJs, null);
             }
         });
     }
