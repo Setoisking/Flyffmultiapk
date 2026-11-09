@@ -78,7 +78,7 @@ public class MainActivity extends Activity {
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEPSCREEN_ON);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.main);
         hideSystemUI();
@@ -427,7 +427,6 @@ public class MainActivity extends Activity {
         topDock.setBackgroundColor(Color.parseColor("#CC101014"));
         topDock.setPadding((int) (4 * density), 0, (int) (4 * density), 0);
 
-        // Saubere final-Initialisierung für Lambdas
         final String badgeText;
         if (role == ROLE_HEAL) {
             badgeText = "RM";
