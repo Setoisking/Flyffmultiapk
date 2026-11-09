@@ -71,13 +71,13 @@ public class MainActivity extends Activity {
     private final Handler loopHandler = new Handler(Looper.getMainLooper());
 
     private final int[] CLIENT_COLORS = {
-            Color.parseColor("#00E676"), // C2: Grün
-            Color.parseColor("#00E5FF"), // C3: Cyan
-            Color.parseColor("#FF007F"), // C4: Pink
-            Color.parseColor("#FFD600"), // C5: Gelb
-            Color.parseColor("#7C4DFF"), // C6: Lila
-            Color.parseColor("#FF6D00"), // C7: Orange
-            Color.parseColor("#1DE9B6")  // C8: Türkis
+            Color.parseColor("#00E676"),
+            Color.parseColor("#00E5FF"),
+            Color.parseColor("#FF007F"),
+            Color.parseColor("#FFD600"),
+            Color.parseColor("#7C4DFF"),
+            Color.parseColor("#FF6D00"),
+            Color.parseColor("#1DE9B6")
     };
 
     @Override
@@ -733,7 +733,6 @@ public class MainActivity extends Activity {
 
         startHpWatcherLoop(webView, clientUid, floatingBadge, accentColor);
 
-        // Akku- & Thermal-Guard
         final Handler thermalHandler = new Handler(Looper.getMainLooper());
         final boolean[] isDimmed = {false};
 
@@ -1201,16 +1200,20 @@ public class MainActivity extends Activity {
             @Override
             public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
-                // Setzt UI-Scale in den Flyff Universe Spieleinstellungen direkt auf 65 % (0.65)
                 String scaleJs = "(function() {" +
-                        "  try {" +
-                        "    var raw = localStorage.getItem('settings') || '{}';" +
-                        "    var s = JSON.parse(raw);" +
-                        "    s.uiScale = 0.65;" +
-                        "    s.scale = 0.65;" +
-                        "    localStorage.setItem('settings', JSON.stringify(s));" +
-                        "    window.dispatchEvent(new Event('resize'));" +
-                        "  } catch(e) {}" +
+                        "  function applyScale() {" +
+                        "    try {" +
+                        "      localStorage.setItem('option:scale', '65');" +
+                        "      localStorage.setItem('option:uiScale', '65');" +
+                        "      if (window.Settings && window.Settings.options) {" +
+                        "        window.Settings.options.scale = 65;" +
+                        "      }" +
+                        "      window.dispatchEvent(new Event('resize'));" +
+                        "    } catch(e) {}" +
+                        "  }" +
+                        "  applyScale();" +
+                        "  setTimeout(applyScale, 1500);" +
+                        "  setTimeout(applyScale, 3000);" +
                         "})();";
                 v.evaluateJavascript(scaleJs, null);
             }
