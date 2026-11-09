@@ -78,7 +78,7 @@ public class MainActivity extends Activity {
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEPSCREEN_ON);
 
         setContentView(R.layout.main);
         hideSystemUI();
@@ -359,7 +359,6 @@ public class MainActivity extends Activity {
                 .show();
     }
 
-    // Schritt 2: Rollen für jede gewählte Session festlegen
     private void promptSessionRole(final int currentSessionIndex, final int totalSessions) {
         final String[] roles = {"Main (DD)", "Heal (RM / Support)", "Leech"};
 
@@ -369,12 +368,11 @@ public class MainActivity extends Activity {
         builder.setTitle("Rolle für Session " + (currentSessionIndex + 1) + " (" + sessionName + ")")
                 .setCancelable(false)
                 .setItems(roles, (dialog, which) -> {
-                    sessionRoles[currentSessionIndex] = which; // 0 = DD, 1 = Heal, 2 = Leech
+                    sessionRoles[currentSessionIndex] = which;
 
                     if (currentSessionIndex + 1 < totalSessions) {
                         promptSessionRole(currentSessionIndex + 1, totalSessions);
                     } else {
-                        // Alle Rollen gewählt -> Overlays initialisieren
                         int overlayCount = totalSessions - 1;
                         for (int i = 0; i < overlayCount; i++) {
                             int clientIndex = i + 1;
@@ -408,7 +406,6 @@ public class MainActivity extends Activity {
         bg.setStroke((int) (2 * density), accentColor);
         container.setBackground(bg);
 
-        // WebView
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
@@ -420,7 +417,6 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // Quick-Action Dock
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (28 * density));
@@ -431,11 +427,17 @@ public class MainActivity extends Activity {
         topDock.setBackgroundColor(Color.parseColor("#CC101014"));
         topDock.setPadding((int) (4 * density), 0, (int) (4 * density), 0);
 
-        // Rollen-Badge-Kürzel
-        String badgeText = "C" + clientNumber;
-        if (role == ROLE_HEAL) badgeText = "RM";
-        else if (role == ROLE_LEECH) badgeText = "LC";
-        else if (role == ROLE_DD) badgeText = "DD";
+        // Saubere final-Initialisierung für Lambdas
+        final String badgeText;
+        if (role == ROLE_HEAL) {
+            badgeText = "RM";
+        } else if (role == ROLE_LEECH) {
+            badgeText = "LC";
+        } else if (role == ROLE_DD) {
+            badgeText = "DD";
+        } else {
+            badgeText = "C" + clientNumber;
+        }
 
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setShape(GradientDrawable.OVAL);
@@ -451,7 +453,6 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
-        // Buttons anhand der gewählten Rolle erzeugen
         if (role == ROLE_HEAL) {
             TextView btnHeal = createDockButton("Heal", accentColor, density);
             btnHeal.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
@@ -473,7 +474,6 @@ public class MainActivity extends Activity {
             btnCheer.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit2", 50));
             topDock.addView(btnCheer);
         } else {
-            // DD
             TextView btnAtk = createDockButton("Atk", accentColor, density);
             btnAtk.setOnClickListener(v -> sendGameKeyEvent(webView, "Digit1", 49));
             topDock.addView(btnAtk);
@@ -483,7 +483,6 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
-        // Transparenz / Ghost Toggle
         final boolean[] isTransparent = {false};
         TextView btnGhost = createDockButton("👻", accentColor, density);
         btnGhost.setOnClickListener(v -> {
@@ -499,7 +498,6 @@ public class MainActivity extends Activity {
         });
         topDock.addView(btnGhost);
 
-        // Ghost-Touch Lock
         final boolean[] isTouchLocked = {false};
         TextView btnLock = createDockButton("🔓", accentColor, density);
         btnLock.setOnClickListener(v -> {
@@ -520,7 +518,6 @@ public class MainActivity extends Activity {
 
         container.addView(topDock);
 
-        // Resize Handle
         TextView resizeHandle = new TextView(this);
         FrameLayout.LayoutParams resizeParams = new FrameLayout.LayoutParams((int) (24 * density), (int) (24 * density));
         resizeParams.gravity = Gravity.BOTTOM | Gravity.END;
@@ -570,7 +567,6 @@ public class MainActivity extends Activity {
                         }
                     }
 
-                    // Klick auf Badge (unter 250ms) = Minimieren
                     if (duration < 250 && event.getX() < 40 * density) {
                         if (!isMinimized[0]) {
                             savedWidth[0] = container.getWidth();
@@ -606,7 +602,6 @@ public class MainActivity extends Activity {
                         return true;
                     }
 
-                    // Langer Druck auf Badge = Vollbild Swap ohne Reload
                     if (duration >= 600 && event.getX() < 40 * density) {
                         swapViewsWithoutReload(overlayIndex);
                         return true;
