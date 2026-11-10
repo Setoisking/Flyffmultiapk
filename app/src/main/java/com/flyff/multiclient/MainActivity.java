@@ -178,11 +178,7 @@ public class MainActivity extends Activity {
                 .setTitle("Select Language / Sprache wählen")
                 .setCancelable(false)
                 .setItems(languages, (dialog, which) -> {
-                    if (which == 0) {
-                        currentLang = "de";
-                    } else {
-                        currentLang = "en";
-                    }
+                    currentLang = (which == 0) ? "de" : "en";
                     prefs.edit().putString("selected_language", currentLang).apply();
                     checkForUpdates();
                 })
@@ -497,6 +493,9 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ==========================================
+    // MULTI-SESSION OVERLAYS MIT Z-INDEX STAPELUNG
+    // ==========================================
     @SuppressLint("ClickableViewAccessibility")
     private void createOverlaySession(int clientNumber, int accentColor, int index, int role) {
         float density = getResources().getDisplayMetrics().density;
@@ -521,7 +520,6 @@ public class MainActivity extends Activity {
         WebView webView = new WebView(this);
         FrameLayout.LayoutParams webParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
-        // Höhe der Leiste angepasst (24 dp statt 28 dp)
         webParams.topMargin = (int) (24 * density);
         webView.setLayoutParams(webParams);
         configureWebView(webView, clientNumber, true);
@@ -530,7 +528,6 @@ public class MainActivity extends Activity {
         activeWebViews.add(webView);
         container.addView(webView);
 
-        // 10 % kleinere Schnellleiste (24 dp Höhe)
         LinearLayout topDock = new LinearLayout(this);
         FrameLayout.LayoutParams dockParams = new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, (int) (24 * density));
@@ -551,7 +548,6 @@ public class MainActivity extends Activity {
         badgeBg.setShape(GradientDrawable.OVAL);
         badgeBg.setColor(accentColor);
 
-        // Kleineres Badge (21×21 dp)
         TextView floatingBadge = new TextView(this);
         LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams((int) (21 * density), (int) (21 * density));
         floatingBadge.setLayoutParams(badgeParams);
@@ -562,7 +558,6 @@ public class MainActivity extends Activity {
         floatingBadge.setBackground(badgeBg);
         topDock.addView(floatingBadge);
 
-        // Mini-Dock Buttons für minimierten Zustand
         TextView miniBtnHeal = null;
         if (role == ROLE_HEAL) {
             miniBtnHeal = createDockButton("H", accentColor, density, 20, 18);
@@ -583,7 +578,6 @@ public class MainActivity extends Activity {
         final String[] targetKeyToRecord = {""};
 
         if (role == ROLE_HEAL) {
-            // RM Buttons: speziell schmaler gehalten (26×19 dp)
             TextView btnHeal = createDockButton("Heal", accentColor, density, 26, 19);
             final TextView finalBtnHeal = btnHeal;
             btnHeal.setOnClickListener(v -> {
@@ -659,7 +653,6 @@ public class MainActivity extends Activity {
             topDock.addView(btnAutoFollow);
 
         } else if (role == ROLE_LEECH) {
-            // LEECHER: Ausschließlich Follow & Auto-Follow (KEIN Heal, Buff oder Cheer)
             TextView btnFollow = createDockButton("Fol", accentColor, density, 28, 19);
             final TextView finalBtnFol2 = btnFollow;
             btnFollow.setOnClickListener(v -> {
@@ -708,7 +701,6 @@ public class MainActivity extends Activity {
             topDock.addView(btnSkill);
         }
 
-        // 10 % kleinere Funktions-Buttons (23×19 dp)
         TextView btnSettings = createDockButton("⚙", accentColor, density, 23, 19);
         btnSettings.setOnClickListener(v -> {
             isRecordingMode[0] = !isRecordingMode[0];
@@ -783,8 +775,14 @@ public class MainActivity extends Activity {
             thermalHandler.postDelayed(dimmingTask, 20000);
         };
 
+        // Z-Index Anhebung: Berührtes Fenster wandert sofort nach vorne
         webView.setOnTouchListener((v, event) -> {
             resetDimmingTimer.run();
+
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                container.bringToFront();
+                overlayLayer.invalidate();
+            }
 
             if (isRecordingMode[0] && !targetKeyToRecord[0].isEmpty() && event.getAction() == MotionEvent.ACTION_UP) {
                 float clickX = event.getX();
@@ -846,6 +844,8 @@ public class MainActivity extends Activity {
 
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    container.bringToFront();
+                    overlayLayer.invalidate();
                     dX[0] = container.getX() - event.getRawX();
                     dY[0] = container.getY() - event.getRawY();
                     downTime[0] = System.currentTimeMillis();
@@ -939,6 +939,8 @@ public class MainActivity extends Activity {
 
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
+                    container.bringToFront();
+                    overlayLayer.invalidate();
                     startX[0] = event.getRawX();
                     startY[0] = event.getRawY();
                     startW[0] = container.getWidth();
@@ -1097,7 +1099,6 @@ public class MainActivity extends Activity {
         wv.evaluateJavascript(js, null);
     }
 
-    // Erstellt ca. 10 % kleinere Buttons mit anpassbarer Breite
     private TextView createDockButton(String text, int accentColor, float density, int widthDp, int heightDp) {
         TextView btn = new TextView(this);
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams((int) (widthDp * density), (int) (heightDp * density));
@@ -1197,6 +1198,9 @@ public class MainActivity extends Activity {
         wv.evaluateJavascript(js, null);
     }
 
+    // ==========================================
+    // GETRENNTE LOGINS & NATIVES 65% SKALIEREN
+    // ==========================================
     @SuppressLint("SetJavaScriptEnabled")
     private void configureWebView(WebView view, int clientSessionId, boolean isOverlay) {
         WebSettings s = view.getSettings();
@@ -1236,42 +1240,41 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
 
-                // Zieht den tatsächlichen Flyff-Schieberegler und die Engine-Werte auf 65 %
-                String scaleJs = "(function() {" +
-                        "  function force65Scale() {" +
+                // 1. Session-Isolierung: Jedes Fenster erhält ein eigenes LocalStorage-Prefix (Login-Trennung)
+                // 2. Viewport- & Engine-Skalierung: Zwingt den Canvas und die Flyff-Engine auf 65 %
+                String injectionJs = "(function() {" +
+                        "  var sid = 'sess_" + clientSessionId + "_';" +
+                        "  try {" +
+                        "    if (!window.__storageIsolated) {" +
+                        "      var origSet = localStorage.setItem.bind(localStorage);" +
+                        "      var origGet = localStorage.getItem.bind(localStorage);" +
+                        "      localStorage.setItem = function(k, val) { return origSet(sid + k, val); };" +
+                        "      localStorage.getItem = function(k) { return origGet(sid + k); };" +
+                        "      window.__storageIsolated = true;" +
+                        "    }" +
+                        "  } catch(e) {}" +
+                        "  function apply65Scale() {" +
                         "    try {" +
-                        "      for (var k in localStorage) {" +
-                        "        if (k.indexOf('option') !== -1 || k.indexOf('setting') !== -1) {" +
-                        "          try {" +
-                        "            var item = JSON.parse(localStorage.getItem(k));" +
-                        "            if (item && typeof item === 'object') {" +
-                        "              if ('scale' in item) item.scale = 65;" +
-                        "              if ('uiScale' in item) item.uiScale = 0.65;" +
-                        "              localStorage.setItem(k, JSON.stringify(item));" +
-                        "            }" +
-                        "          } catch(e) {}" +
-                        "        }" +
-                        "      }" +
                         "      localStorage.setItem('option:scale', '65');" +
                         "      localStorage.setItem('scale', '65');" +
-                        "      var sliders = document.querySelectorAll('input[type=\"range\"]');" +
-                        "      sliders.forEach(function(slider) {" +
-                        "        var row = slider.closest('tr') || slider.parentElement;" +
-                        "        if (row && (row.innerText.indexOf('Skaliert') !== -1 || row.innerText.indexOf('Scale') !== -1)) {" +
-                        "          slider.value = 65;" +
-                        "          slider.dispatchEvent(new Event('input', {bubbles: true}));" +
-                        "          slider.dispatchEvent(new Event('change', {bubbles: true}));" +
-                        "        }" +
-                        "      });" +
-                        "      window.dispatchEvent(new Event('resize'));" +
+                        "      var canvas = document.querySelector('canvas');" +
+                        "      if (canvas && !canvas.__scaled) {" +
+                        "        document.body.style.transform = 'scale(0.65)';" +
+                        "        document.body.style.transformOrigin = '0 0';" +
+                        "        document.body.style.width = '153.84%';" +
+                        "        document.body.style.height = '153.84%';" +
+                        "        document.documentElement.style.overflow = 'hidden';" +
+                        "        canvas.__scaled = true;" +
+                        "        window.dispatchEvent(new Event('resize'));" +
+                        "      }" +
                         "    } catch(err) {}" +
                         "  }" +
-                        "  force65Scale();" +
-                        "  setTimeout(force65Scale, 1500);" +
-                        "  setTimeout(force65Scale, 3000);" +
-                        "  setTimeout(force65Scale, 5500);" +
+                        "  apply65Scale();" +
+                        "  setTimeout(apply65Scale, 1000);" +
+                        "  setTimeout(apply65Scale, 2500);" +
                         "})();";
-                v.evaluateJavascript(scaleJs, null);
+
+                v.evaluateJavascript(injectionJs, null);
             }
         });
     }
