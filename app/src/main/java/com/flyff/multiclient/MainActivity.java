@@ -70,13 +70,13 @@ public class MainActivity extends Activity {
     private final Handler loopHandler = new Handler(Looper.getMainLooper());
 
     private final int[] CLIENT_COLORS = {
-            Color.parseColor("#00E676"),
-            Color.parseColor("#00E5FF"),
-            Color.parseColor("#FF007F"),
-            Color.parseColor("#FFD600"),
-            Color.parseColor("#7C4DFF"),
-            Color.parseColor("#FF6D00"),
-            Color.parseColor("#1DE9B6")
+            Color.parseColor("#00E676"), // C2: Grün
+            Color.parseColor("#00E5FF"), // C3: Cyan
+            Color.parseColor("#FF007F"), // C4: Pink
+            Color.parseColor("#FFD600"), // C5: Gelb
+            Color.parseColor("#7C4DFF"), // C6: Lila
+            Color.parseColor("#FF6D00"), // C7: Orange
+            Color.parseColor("#1DE9B6")  // C8: Türkis
     };
 
     @Override
@@ -171,6 +171,9 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ==========================================
+    // SPRACHAUSWAHL & UPDATE-CHECKER
+    // ==========================================
     private void promptLanguageSelection() {
         final String[] languages = {"Deutsch (DE)", "English (EN)"};
 
@@ -382,6 +385,9 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ==========================================
+    // SESSION-SETUP LADEN ODER NEU WÄHLEN
+    // ==========================================
     private void checkSavedSessionSetup() {
         boolean hasSaved = prefs.getBoolean("has_saved_setup", false);
         if (hasSaved) {
@@ -775,7 +781,6 @@ public class MainActivity extends Activity {
             thermalHandler.postDelayed(dimmingTask, 20000);
         };
 
-        // Z-Index Anhebung: Berührtes Fenster wandert sofort nach vorne
         webView.setOnTouchListener((v, event) -> {
             resetDimmingTimer.run();
 
@@ -939,8 +944,6 @@ public class MainActivity extends Activity {
 
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    container.bringToFront();
-                    overlayLayer.invalidate();
                     startX[0] = event.getRawX();
                     startY[0] = event.getRawY();
                     startW[0] = container.getWidth();
