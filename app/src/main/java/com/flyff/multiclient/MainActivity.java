@@ -70,13 +70,13 @@ public class MainActivity extends Activity {
     private final Handler loopHandler = new Handler(Looper.getMainLooper());
 
     private final int[] CLIENT_COLORS = {
-            Color.parseColor("#00E676"), // C2: Grün
-            Color.parseColor("#00E5FF"), // C3: Cyan
-            Color.parseColor("#FF007F"), // C4: Pink
-            Color.parseColor("#FFD600"), // C5: Gelb
-            Color.parseColor("#7C4DFF"), // C6: Lila
-            Color.parseColor("#FF6D00"), // C7: Orange
-            Color.parseColor("#1DE9B6")  // C8: Türkis
+            Color.parseColor("#00E676"),
+            Color.parseColor("#00E5FF"),
+            Color.parseColor("#FF007F"),
+            Color.parseColor("#FFD600"),
+            Color.parseColor("#7C4DFF"),
+            Color.parseColor("#FF6D00"),
+            Color.parseColor("#1DE9B6")
     };
 
     @Override
@@ -171,9 +171,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // SPRACHAUSWAHL & UPDATE-CHECKER
-    // ==========================================
     private void promptLanguageSelection() {
         final String[] languages = {"Deutsch (DE)", "English (EN)"};
 
@@ -385,9 +382,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    // ==========================================
-    // SESSION-SETUP LADEN ODER NEU WÄHLEN
-    // ==========================================
     private void checkSavedSessionSetup() {
         boolean hasSaved = prefs.getBoolean("has_saved_setup", false);
         if (hasSaved) {
@@ -1202,7 +1196,7 @@ public class MainActivity extends Activity {
     }
 
     // ==========================================
-    // GETRENNTE LOGINS & NATIVES 65% SKALIEREN
+    // GETRENNTE LOGINS (OHNE VERZERRTE SKALIERUNG)
     // ==========================================
     @SuppressLint("SetJavaScriptEnabled")
     private void configureWebView(WebView view, int clientSessionId, boolean isOverlay) {
@@ -1243,8 +1237,7 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView v, String url) {
                 super.onPageFinished(v, url);
 
-                // 1. Session-Isolierung: Jedes Fenster erhält ein eigenes LocalStorage-Prefix (Login-Trennung)
-                // 2. Viewport- & Engine-Skalierung: Zwingt den Canvas und die Flyff-Engine auf 65 %
+                // Reines Session-Scoping für Login-Trennung ohne CSS-Verzerrungen
                 String injectionJs = "(function() {" +
                         "  var sid = 'sess_" + clientSessionId + "_';" +
                         "  try {" +
@@ -1256,25 +1249,6 @@ public class MainActivity extends Activity {
                         "      window.__storageIsolated = true;" +
                         "    }" +
                         "  } catch(e) {}" +
-                        "  function apply65Scale() {" +
-                        "    try {" +
-                        "      localStorage.setItem('option:scale', '65');" +
-                        "      localStorage.setItem('scale', '65');" +
-                        "      var canvas = document.querySelector('canvas');" +
-                        "      if (canvas && !canvas.__scaled) {" +
-                        "        document.body.style.transform = 'scale(0.65)';" +
-                        "        document.body.style.transformOrigin = '0 0';" +
-                        "        document.body.style.width = '153.84%';" +
-                        "        document.body.style.height = '153.84%';" +
-                        "        document.documentElement.style.overflow = 'hidden';" +
-                        "        canvas.__scaled = true;" +
-                        "        window.dispatchEvent(new Event('resize'));" +
-                        "      }" +
-                        "    } catch(err) {}" +
-                        "  }" +
-                        "  apply65Scale();" +
-                        "  setTimeout(apply65Scale, 1000);" +
-                        "  setTimeout(apply65Scale, 2500);" +
                         "})();";
 
                 v.evaluateJavascript(injectionJs, null);
